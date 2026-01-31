@@ -357,7 +357,32 @@ added_note = ""
 
 import random
 
-def ACO(dist_matrix, num_cities, max_it, num_ants, initial_pheromone, alpha, beta, decay_rate):
+TAU_MIN = 1e-12
+
+def get_initial_pheromone(dist_matrix, num_cities):
+    start_node = current_node = random.randint(0,num_cities-1)
+    unvisited = [_ for _ in range(num_cities) if _ != start_node]
+    nearest_neighbour_length = 0
+
+    while unvisited:
+        min_distance = 100000000000000000000000
+        for node in unvisited:
+            if dist_matrix[current_node][node] < min_distance:
+                min_distance = dist_matrix[current_node][node]
+                min_node = node
+        nearest_neighbour_length += min_distance
+        current_node = min_node
+        unvisited.remove(min_node)
+
+    nearest_neighbour_length += dist_matrix[current_node][start_node]
+    return 1 / (num_cities * nearest_neighbour_length)
+
+
+
+
+def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate):
+    initial_pheromone = get_initial_pheromone(dist_matrix, num_cities)
+
     pheromone_matrix = []
     for i in range(num_cities):
         pheromone_node = []
@@ -370,7 +395,6 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, initial_pheromone, alpha, bet
 
     best_tour = []
     best_tour_length = 1000000000000000000000000000000
-    t = 0
     for t in range(max_it):
         ants = []
         for i in range(num_ants):
@@ -381,17 +405,18 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, initial_pheromone, alpha, bet
             while len(ant[0]) < num_cities:
                 scores = []
                 for edge in ant[1]:
-                    edge_score = pheromone_matrix[ant[0][-1]][edge]**alpha + (1/dist_matrix[ant[0][-1]][edge])**beta
+                    edge_score = pheromone_matrix[ant[0][-1]][edge]**alpha * (1/dist_matrix[ant[0][-1]][edge])**beta
                     scores.append(edge_score)
 
                 edge_chosen = random.choices(ant[1], weights=scores, k=1)[0]
                 ant[2] += dist_matrix[ant[0][-1]][edge_chosen]
                 ant[0].append(edge_chosen)
                 ant[1].remove(edge_chosen)
+            ant[2] += dist_matrix[ant[0][-1]][ant[0][0]]
 
         for i in range(len(pheromone_matrix)):
             for j in range(len(pheromone_matrix[0])):
-                pheromone_matrix[i][j] *= decay_rate
+                pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*decay_rate)
 
         for ant in ants:
             if ant[2] < best_tour_length:
@@ -400,19 +425,20 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, initial_pheromone, alpha, bet
 
             for i in range(len(ant[0])-1):
                 pheromone_matrix[ant[0][i]][ant[0][i+1]] += 1 / ant[2]
+            pheromone_matrix[ant[0][-1]][ant[0][0]] += 1 / ant[2]
 
     return best_tour, best_tour_length
 
 
 
-max_it = 200
-num_ants = 100
+max_it = 2000
+num_ants = num_cities
 alpha = 1
 beta = 3
 decay_rate = 0.5
 initial_pheromone = num_ants / sum(_ for _ in dist_matrix[0])
 
-tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, initial_pheromone, alpha, beta, decay_rate)
+tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate)
 
 
 
