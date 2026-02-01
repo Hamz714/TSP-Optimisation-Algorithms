@@ -413,6 +413,31 @@ def generate_pheromone_matrix(initial_pheromone, num_cities):
     return pheromone_matrix
 
 
+def calculate_tour_length(dist_matrix, tour):
+    tour_length = 0
+    for i in range(len(tour)-1):
+        tour_length += dist_matrix[tour[i]][tour[i+1]]
+    tour_length += dist_matrix[tour[-1]][tour[0]]
+    return tour_length
+
+
+def two_opt(dist_matrix, best_tour, best_tour_length):
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(best_tour)-1):
+            for j in range(i+2, len(best_tour)-1):
+                new_tour = best_tour[:i+1] + best_tour[i+1:j+1][::-1] + best_tour[j+1:]
+                new_tour_length = calculate_tour_length(dist_matrix, new_tour)
+                if new_tour_length < best_tour_length:
+                    best_tour = new_tour
+                    best_tour_length = new_tour_length
+                    changed = True
+                    break
+            if changed:
+                break
+    return best_tour, best_tour_length
+
 def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
     initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
     pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
@@ -443,6 +468,8 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
             best_tour = ants[0].visited[:]
             best_tour_length = ants[0].tour_length
 
+        best_tour, best_tour_length = two_opt(dist_matrix, best_tour, best_tour_length)
+
         for i in range(len(pheromone_matrix)):
             for j in range(len(pheromone_matrix[0])):
                 pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*(1-decay_rate))
@@ -472,6 +499,8 @@ decay_rate = 0.1
 w = 6
 
 tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w)
+
+
 
 
 
