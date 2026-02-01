@@ -376,7 +376,7 @@ class Ant:
         self.tour_length += dist_matrix[self.current][self.start]
 
 
-def get_initial_pheromone(dist_matrix, num_cities):
+def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
     best_nearest_neighbour_length = 1000000000000000000
 
     for start_node in range(num_cities):
@@ -397,7 +397,7 @@ def get_initial_pheromone(dist_matrix, num_cities):
 
         best_nearest_neighbour_length = min(best_nearest_neighbour_length, nearest_neighbour_length)
 
-    return 1 / (num_cities * best_nearest_neighbour_length)
+    return 0.5 * w * (w-1) / (decay_rate * best_nearest_neighbour_length)
 
 
 def generate_pheromone_matrix(initial_pheromone, num_cities):
@@ -413,8 +413,8 @@ def generate_pheromone_matrix(initial_pheromone, num_cities):
     return pheromone_matrix
 
 
-def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate):
-    initial_pheromone = get_initial_pheromone(dist_matrix, num_cities)
+def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
+    initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
     pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
 
     best_tour = []
@@ -437,26 +437,31 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate):
             for j in range(len(pheromone_matrix[0])):
                 pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*decay_rate)
 
-        for ant in ants:
-            if ant.tour_length < best_tour_length:
-                best_tour = ant.visited
-                best_tour_length = ant.tour_length
+        ants.sort(key=lambda ant: ant.tour_length)
+        if ants[0].tour_length < best_tour_length:
+            best_tour = ants[0].visited[:]
+            best_tour_length = ants[0].tour_length
 
+        for rank, ant in enumerate(ants[:w]):
             for i in range(len(ant.visited)-1):
-                pheromone_matrix[ant.visited[i]][ant.visited[i+1]] += 1 / ant.tour_length
-            pheromone_matrix[ant.visited[-1]][ant.visited[0]] += 1 / ant.tour_length
+                pheromone_matrix[ant.visited[i]][ant.visited[i+1]] += (w - rank) / ant.tour_length
+            pheromone_matrix[ant.visited[-1]][ant.visited[0]] += (w - rank) / ant.tour_length       
+        for i in range(len(best_tour)-1):
+            pheromone_matrix[best_tour[i]][best_tour[i+1]] += w / best_tour_length
+        pheromone_matrix[best_tour[-1]][best_tour[0]] += w / best_tour_length
 
     return best_tour, best_tour_length
 
 
 
-max_it = 1000
+max_it = 2000
 num_ants = num_cities
 alpha = 1
 beta = 3
-decay_rate = 0.5
+decay_rate = 0.9
+w = 6
 
-tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate)
+tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w)
 
 
 
