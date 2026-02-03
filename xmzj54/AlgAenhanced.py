@@ -422,21 +422,26 @@ def calculate_tour_length(dist_matrix, tour):
 
 
 def two_opt(dist_matrix, best_tour, best_tour_length):
-    changed = True
-    while changed:
-        changed = False
+    improved = True
+    while improved:
+        improved = False
         for i in range(len(best_tour)-1):
-            for j in range(i+2, len(best_tour)-1):
-                new_tour = best_tour[:i+1] + best_tour[i+1:j+1][::-1] + best_tour[j+1:]
-                new_tour_length = calculate_tour_length(dist_matrix, new_tour)
-                if new_tour_length < best_tour_length:
-                    best_tour = new_tour
-                    best_tour_length = new_tour_length
-                    changed = True
+            for j in range(i+2, len(best_tour)):
+                if j == len(best_tour) - 1 and i == 0:
+                    continue
+
+                current_cost = dist_matrix[best_tour[i]][best_tour[i+1]] + dist_matrix[best_tour[j]][best_tour[(j+1) % len(best_tour)]]
+                new_cost = dist_matrix[best_tour[i]][best_tour[j]] + dist_matrix[best_tour[i+1]][best_tour[(j+1) % len(best_tour)]]
+
+                if new_cost < current_cost:
+                    best_tour[i+1:j+1] = best_tour[i+1:j+1][::-1]
+                    best_tour_length += new_cost - current_cost
+                    improved = True
                     break
-            if changed:
+            if improved:
                 break
     return best_tour, best_tour_length
+
 
 def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
     initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
@@ -464,11 +469,13 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
             ant.close(dist_matrix)
 
         ants.sort(key=lambda ant: ant.tour_length)
+
+        for ant in ants[:w]:
+            ant.visited, ant.tour_length = two_opt(dist_matrix, ant.visited, ant.tour_length)
+
         if ants[0].tour_length < best_tour_length:
             best_tour = ants[0].visited[:]
             best_tour_length = ants[0].tour_length
-
-        best_tour, best_tour_length = two_opt(dist_matrix, best_tour, best_tour_length)
 
         for i in range(len(pheromone_matrix)):
             for j in range(len(pheromone_matrix[0])):
