@@ -363,7 +363,8 @@ class Ant:
     def __init__(self, num_cities):
         self.start = self.current = random.randint(0, num_cities-1)
         self.visited = [self.start]
-        self.unvisited = [_ for _ in range(num_cities) if _ != self.start]
+        self.unvisited = set(range(num_cities))
+        self.unvisited.remove(self.start)
         self.tour_length = 0
 
     def move(self, city, dist_matrix):
@@ -421,31 +422,76 @@ def calculate_tour_length(dist_matrix, tour):
     return tour_length
 
 
-def two_opt(dist_matrix, best_tour, best_tour_length):
+def two_opt(dist_matrix, tour, tour_length):
     improved = True
     while improved:
         improved = False
-        for i in range(len(best_tour)-1):
-            for j in range(i+2, len(best_tour)):
-                if j == len(best_tour) - 1 and i == 0:
+        for i in range(len(tour)-1):
+            for j in range(i+2, len(tour)):
+                if j == len(tour) - 1 and i == 0:
                     continue
 
-                current_cost = dist_matrix[best_tour[i]][best_tour[i+1]] + dist_matrix[best_tour[j]][best_tour[(j+1) % len(best_tour)]]
-                new_cost = dist_matrix[best_tour[i]][best_tour[j]] + dist_matrix[best_tour[i+1]][best_tour[(j+1) % len(best_tour)]]
+                current_cost = dist_matrix[tour[i]][tour[i+1]] + dist_matrix[tour[j]][tour[(j+1) % len(tour)]]
+                new_cost = dist_matrix[tour[i]][tour[j]] + dist_matrix[tour[i+1]][tour[(j+1) % len(tour)]]
 
                 if new_cost < current_cost:
-                    best_tour[i+1:j+1] = best_tour[i+1:j+1][::-1]
-                    best_tour_length += new_cost - current_cost
+                    tour[i+1:j+1] = tour[i+1:j+1][::-1]
+                    tour_length += new_cost - current_cost
                     improved = True
                     break
             if improved:
                 break
-    return best_tour, best_tour_length
+    return tour, tour_length
+
+
+def two_opt_best(dist_matrix, tour, tour_length):
+    improved = True
+    while improved:
+        improved = False
+        best_i, best_j = -1, -1
+        best_delta = 0
+        for i in range(len(tour)-1):
+            for j in range(i+2, len(tour)):
+                if j == len(tour) - 1 and i == 0:
+                    continue
+
+                current_cost = dist_matrix[tour[i]][tour[i+1]] + dist_matrix[tour[j]][tour[(j+1) % len(tour)]]
+                new_cost = dist_matrix[tour[i]][tour[j]] + dist_matrix[tour[i+1]][tour[(j+1) % len(tour)]]
+                delta = current_cost - new_cost
+
+                if delta > best_delta:
+                    best_i, best_j = i, j
+                    improved = True
+
+        if improved:
+            tour[best_i+1:best_j+1] = tour[best_i+1:best_j+1][::-1]
+            tour_length -= best_delta
+                    
+    return tour, tour_length
+
+
+def generate_candidates(dist_matrix, num_cities, beta, n=20):
+    candidates = []
+    candidates_number = min(num_cities, n)
+    for i in range(num_cities):
+        row = []
+        for j in range(num_cities):
+            if i != j:
+                distance = dist_matrix[i][j]
+                if distance == 0:
+                    heuristic = 1e6
+                else:
+                    heuristic = 1 / distance
+                row.append([j, heuristic**beta])
+        row = sorted(row, key=lambda x: x[1], reverse=True)[:candidates_number]
+        candidates.append(row)
+    return candidates
 
 
 def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
     initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
     pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
+    candidates = generate_candidates(dist_matrix, num_cities, beta)
 
     best_tour = []
     best_tour_length = 1000000000000000000000000000000
@@ -454,24 +500,38 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
 
         for ant in ants:
             while len(ant.visited) < num_cities:
+                possible_moves = []
                 scores = []
-                for edge in ant.unvisited:
-                    distance = dist_matrix[ant.visited[-1]][edge]
-                    if distance == 0:
-                        heuristic = 1e6
-                    else:
-                        heuristic = 1 / distance
-                    edge_score = pheromone_matrix[ant.visited[-1]][edge]**alpha * heuristic**beta
-                    scores.append(edge_score)
+                unvisited_candidates = [candidate for candidate in candidates[ant.visited[-1]] if candidate[0] in ant.unvisited]
 
-                city_chosen = random.choices(ant.unvisited, weights=scores, k=1)[0]
+                if unvisited_candidates:
+                    for city,heuristic in unvisited_candidates:
+                        city_score = pheromone_matrix[ant.visited[-1]][city]**alpha * heuristic
+                        possible_moves.append(city)
+                        scores.append(city_score)
+                    
+                else:
+                    for city in ant.unvisited:
+                        distance = dist_matrix[ant.visited[-1]][city]
+                        if distance == 0:
+                            heuristic = 1e6
+                        else:
+                            heuristic = 1 / distance
+                        edge_score = pheromone_matrix[ant.visited[-1]][city]**alpha * heuristic**beta
+                        possible_moves.append(city)
+                        scores.append(edge_score)
+
+                city_chosen = random.choices(possible_moves, weights=scores, k=1)[0]
                 ant.move(city_chosen, dist_matrix)
             ant.close(dist_matrix)
 
         ants.sort(key=lambda ant: ant.tour_length)
 
-        for ant in ants[:w]:
+        ants[0].visited, ants[0].tour_length = two_opt_best(dist_matrix, ants[0].visited, ants[0].tour_length)
+        for ant in ants[1:w]:
             ant.visited, ant.tour_length = two_opt(dist_matrix, ant.visited, ant.tour_length)
+
+        ants[:w] = sorted(ants[:w], key=lambda ant: ant.tour_length)
 
         if ants[0].tour_length < best_tour_length:
             best_tour = ants[0].visited[:]

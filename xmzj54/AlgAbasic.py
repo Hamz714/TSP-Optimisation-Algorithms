@@ -467,7 +467,7 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
 max_it = 2000
 num_ants = num_cities
 alpha = 1
-beta = 3
+beta = 2.5
 decay_rate = 0.1
 w = 6
 
