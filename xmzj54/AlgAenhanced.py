@@ -488,7 +488,26 @@ def generate_candidates(dist_matrix, num_cities, beta, n=20):
     return candidates
 
 
-def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
+def determine_similarity(ants):
+    best = ants[0].visited
+    median = ants[len(ants)//2].visited
+
+    edges_best = set()
+    for i in range(len(best)):
+        u, v = best[i], best[(i + 1) % len(best)]
+        edges_best.add(tuple(sorted((u, v))))
+
+    same = 0
+    for i in range(len(median)):
+        u, v = median[i], median[(i + 1) % len(median)]
+        if tuple(sorted((u, v))) in edges_best:
+            same += 1
+
+    similarity = same / len(median)
+    return similarity
+
+
+def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, similarity_threshold, smoothing_factor):
     initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
     pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
     candidates = generate_candidates(dist_matrix, num_cities, beta)
@@ -537,6 +556,12 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
             best_tour = ants[0].visited[:]
             best_tour_length = ants[0].tour_length
 
+        if determine_similarity(ants) > similarity_threshold:
+            for row in range(len(pheromone_matrix)):
+                for column in range(len(pheromone_matrix[0])):
+                    if row != column:
+                        pheromone_matrix[row][column] = smoothing_factor * initial_pheromone + (1-smoothing_factor) * pheromone_matrix[row][column]
+
         for i in range(len(pheromone_matrix)):
             for j in range(len(pheromone_matrix[0])):
                 pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*(1-decay_rate))
@@ -558,14 +583,16 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
 
 
 
-max_it = 2000
+max_it = 50
 num_ants = num_cities
 alpha = 1
 beta = 3
 decay_rate = 0.1
 w = 6
+similarity_threshold = 0.95
+smoothing_factor = 0.5
 
-tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w)
+tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, similarity_threshold, smoothing_factor)
 
 
 
