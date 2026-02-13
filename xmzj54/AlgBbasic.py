@@ -270,7 +270,7 @@ print("The codes and tariffs have been read from 'alg_codes_and_tariffs.txt':")
 ############
 ############ END OF SECTOR 5 (IGNORE THIS COMMENT)
 
-my_user_name = "xmzj54"
+my_user_name = "abcd12"
 
 ############ START OF SECTOR 6 (IGNORE THIS COMMENT)
 ############
@@ -294,7 +294,7 @@ my_last_name = "Ibrahim"
 ############
 ############ END OF SECTOR 7 (IGNORE THIS COMMENT)
 
-algorithm_code = "AC"
+algorithm_code = "PS"
 
 ############ START OF SECTOR 8 (IGNORE THIS COMMENT)
 ############
@@ -355,254 +355,104 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-import random
-from datetime import timedelta
-
-TAU_MIN = 1e-12
-
-class Ant:
-    def __init__(self, num_cities):
-        self.start = self.current = random.randint(0, num_cities-1)
-        self.visited = [self.start]
-        self.unvisited = set(range(num_cities))
-        self.unvisited.remove(self.start)
-        self.tour_length = 0
-
-    def move(self, city, dist_matrix):
-        self.tour_length += dist_matrix[self.current][city]
-        self.current = city
-        self.visited.append(city)
-        self.unvisited.remove(city)
-
-    def close(self, dist_matrix):
-        self.tour_length += dist_matrix[self.current][self.start]
+import math
 
 
-def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
-    best_nearest_neighbour_length = 1000000000000000000
-
-    for start_node in range(num_cities):
-        current_node = start_node
-        unvisited = [_ for _ in range(num_cities) if _ != start_node]
-        nearest_neighbour_length = 0
-
-        while unvisited:
-            min_distance = 100000000000000000000000
-            for node in unvisited:
-                if dist_matrix[current_node][node] < min_distance:
-                    min_distance = dist_matrix[current_node][node]
-                    min_node = node
-            nearest_neighbour_length += min_distance
-            current_node = min_node
-            unvisited.remove(min_node)
-        nearest_neighbour_length += dist_matrix[current_node][start_node]
-
-        best_nearest_neighbour_length = min(best_nearest_neighbour_length, nearest_neighbour_length)
-
-    return 0.5 * w * (w-1) / (decay_rate * best_nearest_neighbour_length)
+INITIAL_VELOCITY_LEN = 10
+MAX_VELOCITY_LEN = 100
 
 
-def generate_pheromone_matrix(initial_pheromone, num_cities):
-    pheromone_matrix = []
-    for i in range(num_cities):
-        pheromone_node = []
-        for j in range(num_cities):
-            if i == j:
-                pheromone_node.append(0)
-            else:
-                pheromone_node.append(initial_pheromone)
-        pheromone_matrix.append(pheromone_node)
-    return pheromone_matrix
+class Particle():
+    def __init__(self, num_cities, dist_matrix):
+        tour = list(range(1,num_cities))
+        random.shuffle(tour)
+        self.position = [0] + tour
+        self.best_position = self.position[:]
+        self.velocity = []
+        for i in range(INITIAL_VELOCITY_LEN):
+            index = random.randint(1,num_cities-2)
+            self.velocity.append(index)
+        self.best_tour_length = sum([dist_matrix[self.position[i]][self.position[(i+1)%num_cities]] for i in range(num_cities)])
+
+    def move(self):
+        for index in self.velocity:
+            self.position[index], self.position[index+1] = self.position[index+1], self.position[index]
+
+    def update_best_position(self, num_cities, dist_matrix):
+        new_tour_length = sum([dist_matrix[self.position[i]][self.position[(i+1)%num_cities]] for i in range(num_cities)])
+        if new_tour_length < self.best_tour_length:
+            self.best_tour_length = new_tour_length
+            self.best_position = self.position[:]
 
 
-def calculate_tour_length(dist_matrix, tour):
-    tour_length = 0
-    for i in range(len(tour)-1):
-        tour_length += dist_matrix[tour[i]][tour[i+1]]
-    tour_length += dist_matrix[tour[-1]][tour[0]]
-    return tour_length
+def positions_difference(position1, position2):
+    velocity = []
+    position2 = position2[:]
+    target_indices = {city:i for i,city in enumerate(position1)}
+    for i in range(len(position2)-1):
+        for j in range(1,len(position2)-i-1):
+            if target_indices[position2[j]] > target_indices[position2[j+1]]:
+                velocity.append(j)
+                position2[j], position2[j+1] = position2[j+1], position2[j]
+    return velocity
 
 
-def two_opt(dist_matrix, tour, tour_length):
-    improved = True
-    while improved:
-        improved = False
-        for i in range(len(tour)-1):
-            for j in range(i+2, len(tour)):
-                if j == len(tour) - 1 and i == 0:
-                    continue
-
-                current_cost = dist_matrix[tour[i]][tour[i+1]] + dist_matrix[tour[j]][tour[(j+1) % len(tour)]]
-                new_cost = dist_matrix[tour[i]][tour[j]] + dist_matrix[tour[i+1]][tour[(j+1) % len(tour)]]
-
-                if new_cost < current_cost:
-                    tour[i+1:j+1] = tour[i+1:j+1][::-1]
-                    tour_length += new_cost - current_cost
-                    improved = True
-                    break
-            if improved:
-                break
-    return tour, tour_length
+def epsilon():
+    return random.random() * 2
 
 
-def two_opt_best(dist_matrix, tour, tour_length):
-    improved = True
-    while improved:
-        improved = False
-        best_i, best_j = -1, -1
-        best_delta = 0
-        for i in range(len(tour)-1):
-            for j in range(i+2, len(tour)):
-                if j == len(tour) - 1 and i == 0:
-                    continue
-
-                current_cost = dist_matrix[tour[i]][tour[i+1]] + dist_matrix[tour[j]][tour[(j+1) % len(tour)]]
-                new_cost = dist_matrix[tour[i]][tour[j]] + dist_matrix[tour[i+1]][tour[(j+1) % len(tour)]]
-                delta = current_cost - new_cost
-
-                if delta > best_delta:
-                    best_i, best_j = i, j
-                    improved = True
-
-        if improved:
-            tour[best_i+1:best_j+1] = tour[best_i+1:best_j+1][::-1]
-            tour_length -= best_delta
-                    
-    return tour, tour_length
+def multiply_velocity(scalar, velocity):
+    if scalar < 1:
+        return velocity[:int(scalar*len(velocity))]
+    elif scalar > 1:
+        fraction, integer = math.modf(scalar)
+        return velocity * int(integer) + velocity[:int(fraction*len(velocity))]
+    return velocity
 
 
-def generate_candidates(dist_matrix, num_cities, beta, n=20):
-    candidates = []
-    candidates_number = min(num_cities, n)
-    for i in range(num_cities):
-        row = []
-        for j in range(num_cities):
-            if i != j:
-                distance = dist_matrix[i][j]
-                if distance == 0:
-                    heuristic = 1e6
-                else:
-                    heuristic = 1 / distance
-                row.append([j, heuristic**beta])
-        row = sorted(row, key=lambda x: x[1], reverse=True)[:candidates_number]
-        candidates.append(row)
-    return candidates
+def normalise_velocity(velocity, num_cities):
+    initial_position = list(range(0, num_cities))
+    final_position = initial_position[:]
+    for city in velocity:
+        final_position[city], final_position[city+1] = final_position[city+1], final_position[city]
+    return positions_difference(final_position, initial_position)
 
 
-def determine_similarity(ants):
-    best = ants[0].visited
-    median = ants[len(ants)//2].visited
-
-    edges_best = set()
-    for i in range(len(best)):
-        u, v = best[i], best[(i + 1) % len(best)]
-        edges_best.add(tuple(sorted((u, v))))
-
-    same = 0
-    for i in range(len(median)):
-        u, v = median[i], median[(i + 1) % len(median)]
-        if tuple(sorted((u, v))) in edges_best:
-            same += 1
-
-    similarity = same / len(median)
-    return similarity
-
-
-def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, similarity_threshold, smoothing_factor):
-    initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
-    pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
-    candidates = generate_candidates(dist_matrix, num_cities, beta)
-
-    now = datetime.now()
-    end_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-    if end_time <= now:
-        end_time += timedelta(days=1)
-    iteration = 0
-
+def PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta):
+    particles = []
     best_tour = []
-    best_tour_length = 1000000000000000000000000000000
-    # for t in range(max_it):
-    while datetime.now() < end_time:
-        iteration += 1
-        ants = [Ant(num_cities) for _ in range(num_ants)]
+    best_tour_length = 1000000000000
+    for i in range(num_parts):
+        particle = Particle(num_cities, dist_matrix)
+        particles.append(particle)
+        if particle.best_tour_length < best_tour_length:
+            best_tour = particle.position
+            best_tour_length = particle.best_tour_length
 
-        for ant in ants:
-            while len(ant.visited) < num_cities:
-                possible_moves = []
-                scores = []
-                unvisited_candidates = [candidate for candidate in candidates[ant.visited[-1]] if candidate[0] in ant.unvisited]
+    for t in range(max_it):
+        for particle in particles:
+            particle.velocity = (multiply_velocity(inertia, particle.velocity)
+                                 + multiply_velocity(alpha*epsilon(), positions_difference(particle.best_position, particle.position))
+                                 + multiply_velocity(beta*epsilon(), positions_difference(best_tour, particle.position))
+                                 )
+            if len(particle.velocity) > MAX_VELOCITY_LEN:
+                particle.velocity = normalise_velocity(particle.velocity, num_cities)
+            particle.move()
+            particle.update_best_position(num_cities, dist_matrix)
+            if particle.best_tour_length < best_tour_length:
+                best_tour_length = particle.best_tour_length
+                best_tour = particle.best_position
 
-                if unvisited_candidates:
-                    for city,heuristic in unvisited_candidates:
-                        city_score = pheromone_matrix[ant.visited[-1]][city]**alpha * heuristic
-                        possible_moves.append(city)
-                        scores.append(city_score)
-                    
-                else:
-                    for city in ant.unvisited:
-                        distance = dist_matrix[ant.visited[-1]][city]
-                        if distance == 0:
-                            heuristic = 1e6
-                        else:
-                            heuristic = 1 / distance
-                        edge_score = pheromone_matrix[ant.visited[-1]][city]**alpha * heuristic**beta
-                        possible_moves.append(city)
-                        scores.append(edge_score)
-
-                city_chosen = random.choices(possible_moves, weights=scores, k=1)[0]
-                ant.move(city_chosen, dist_matrix)
-            ant.close(dist_matrix)
-
-        ants.sort(key=lambda ant: ant.tour_length)
-
-        ants[0].visited, ants[0].tour_length = two_opt_best(dist_matrix, ants[0].visited, ants[0].tour_length)
-        for ant in ants[1:w]:
-            ant.visited, ant.tour_length = two_opt(dist_matrix, ant.visited, ant.tour_length)
-
-        ants[:w] = sorted(ants[:w], key=lambda ant: ant.tour_length)
-
-        if ants[0].tour_length < best_tour_length:
-            best_tour = ants[0].visited[:]
-            best_tour_length = ants[0].tour_length
-
-        if determine_similarity(ants) > similarity_threshold:
-            for row in range(len(pheromone_matrix)):
-                for column in range(len(pheromone_matrix[0])):
-                    if row != column:
-                        pheromone_matrix[row][column] = smoothing_factor * initial_pheromone + (1-smoothing_factor) * pheromone_matrix[row][column]
-
-        for i in range(len(pheromone_matrix)):
-            for j in range(len(pheromone_matrix[0])):
-                pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*(1-decay_rate))
-
-        for rank, ant in enumerate(ants[:w]):
-            for i in range(len(ant.visited)-1):
-                pheromone_matrix[ant.visited[i]][ant.visited[i+1]] += (w - rank) / ant.tour_length
-                pheromone_matrix[ant.visited[i+1]][ant.visited[i]] += (w - rank) / ant.tour_length               
-            pheromone_matrix[ant.visited[-1]][ant.visited[0]] += (w - rank) / ant.tour_length  
-            pheromone_matrix[ant.visited[0]][ant.visited[-1]] += (w - rank) / ant.tour_length  
-
-        for i in range(len(best_tour)-1):
-            pheromone_matrix[best_tour[i]][best_tour[i+1]] += w / best_tour_length
-            pheromone_matrix[best_tour[i+1]][best_tour[i]] += w / best_tour_length
-        pheromone_matrix[best_tour[-1]][best_tour[0]] += w / best_tour_length
-        pheromone_matrix[best_tour[0]][best_tour[-1]] += w / best_tour_length
-
-    print(f"Iterations: {iteration}")
     return best_tour, best_tour_length
 
 
+max_it = 2000
+num_parts = 50
+inertia = 0.6
+alpha = 0.75
+beta = 2.9
 
-max_it = 250
-num_ants = num_cities
-alpha = 1
-beta = 3
-decay_rate = 0.1
-w = 6
-similarity_threshold = 0.95
-smoothing_factor = 0.5
-
-tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, similarity_threshold, smoothing_factor)
+tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta)
 
 
 

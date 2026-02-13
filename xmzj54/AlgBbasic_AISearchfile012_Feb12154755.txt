@@ -1,0 +1,8 @@
+USER = abcd12 (Hamzah Ibrahim),
+ALGORITHM CODE = PS, NAME OF CITY-FILE = AISearchfile012.txt,
+SIZE = 12, TOUR LENGTH = 73,
+0,7,4,3,6,2,1,11,9,8,10,5,
+NOTE = The parameter values are 'max_it' = 20000 and 'num_parts' = 30.
+RUN-TIME = 22.0 seconds.
+DATE-TIME = 12/02/2026-15:47:55.
+CERTIFICATE = 1669.
