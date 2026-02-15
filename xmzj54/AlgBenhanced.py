@@ -355,98 +355,78 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-import math
+import statistics
 
 
-INITIAL_VELOCITY_LEN = 10
-MAX_VELOCITY_LEN = 100
-
-
-class Particle():
+class Particle:
     def __init__(self, num_cities, dist_matrix):
-        tour = list(range(1,num_cities))
-        random.shuffle(tour)
-        self.position = [0] + tour
+        self.position = [random.uniform(-5, 5) for _ in range(num_cities)]
+        self.velocity = [random.uniform(-1, 1) for _ in range(num_cities)]
+
+        self.normalise_position()
+
         self.best_position = self.position[:]
-        self.velocity = []
-        for i in range(INITIAL_VELOCITY_LEN):
-            index = random.randint(1,num_cities-2)
-            self.velocity.append(index)
-        self.best_tour_length = sum([dist_matrix[self.position[i]][self.position[(i+1)%num_cities]] for i in range(num_cities)])
+        self.best_tour = get_tour(self.best_position)
+        self.best_tour_length = get_tour_length(self.best_position, dist_matrix)
 
-    def move(self):
-        for index in self.velocity:
-            self.position[index], self.position[index+1] = self.position[index+1], self.position[index]
-
-    def update_best_position(self, num_cities, dist_matrix):
-        new_tour_length = sum([dist_matrix[self.position[i]][self.position[(i+1)%num_cities]] for i in range(num_cities)])
-        if new_tour_length < self.best_tour_length:
-            self.best_tour_length = new_tour_length
-            self.best_position = self.position[:]
-
-
-def positions_difference(position1, position2):
-    velocity = []
-    position2 = position2[:]
-    target_indices = {city:i for i,city in enumerate(position1)}
-    for i in range(len(position2)-1):
-        for j in range(1,len(position2)-i-1):
-            if target_indices[position2[j]] > target_indices[position2[j+1]]:
-                velocity.append(j)
-                position2[j], position2[j+1] = position2[j+1], position2[j]
-    return velocity
-
+    def normalise_position(self):
+        mean = statistics.mean(self.position)
+        self.position = [x-mean for x in self.position]
+    
 
 def epsilon():
     return random.random() * 2
 
 
-def multiply_velocity(scalar, velocity):
-    if scalar < 1:
-        return velocity[:int(scalar*len(velocity))]
-    elif scalar > 1:
-        fraction, integer = math.modf(scalar)
-        return velocity * int(integer) + velocity[:int(fraction*len(velocity))]
-    return velocity
+def get_tour(position):
+    return sorted(range(len(position)), key=lambda i: position[i])
 
 
-def normalise_velocity(velocity, num_cities):
-    initial_position = list(range(0, num_cities))
-    final_position = initial_position[:]
-    for city in velocity:
-        final_position[city], final_position[city+1] = final_position[city+1], final_position[city]
-    return positions_difference(final_position, initial_position)
+def get_tour_length(position, dist_matrix):
+    tour = get_tour(position)
+    return sum([dist_matrix[tour[city]][tour[(city+1)%len(tour)]] for city in tour])
 
 
 def PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta):
     particles = []
     best_tour = None
-    best_tour_length = 1000000000000
+    best_position = None
+    best_tour_length = 100000000000000000
     for _ in range(num_parts):
         particle = Particle(num_cities, dist_matrix)
         particles.append(particle)
         if particle.best_tour_length < best_tour_length:
-            best_tour = particle.position
+            best_tour = particle.best_tour
+            best_position = particle.best_position
             best_tour_length = particle.best_tour_length
 
     for t in range(max_it):
         for particle in particles:
-            particle.velocity = (multiply_velocity(inertia, particle.velocity)
-                                 + multiply_velocity(alpha*epsilon(), positions_difference(particle.best_position, particle.position))
-                                 + multiply_velocity(beta*epsilon(), positions_difference(best_tour, particle.position))
-                                 )
-            if len(particle.velocity) > MAX_VELOCITY_LEN:
-                particle.velocity = normalise_velocity(particle.velocity, num_cities)
-            particle.move()
-            particle.update_best_position(num_cities, dist_matrix)
+            local_best_difference = [x - y for x,y in zip(particle.best_position,particle.position)]
+            global_best_difference = [x - y for x,y in zip(best_position,particle.position)]
+
+            old_velocity_component = [inertia * x for x in particle.velocity]
+            cognitive_velocity_component = [alpha * epsilon() * x for x in local_best_difference]
+            social_velocity_component = [beta * epsilon() * x for x in global_best_difference]
+            particle.velocity = [x+y+z for x,y,z in zip(old_velocity_component,cognitive_velocity_component,social_velocity_component)]
+
+            particle.position = [x + v for x,v in zip(particle.position,particle.velocity)]
+            particle.normalise_position()
+
+            new_tour_length = get_tour_length(particle.position, dist_matrix)
+            if new_tour_length < particle.best_tour_length:
+                particle.best_position = particle.position[:]
+                particle.best_tour = get_tour(particle.position)
+                particle.best_tour_length = new_tour_length
+
             if particle.best_tour_length < best_tour_length:
+                best_tour = particle.best_tour
+                best_position = particle.best_position
                 best_tour_length = particle.best_tour_length
-                best_tour = particle.best_position
 
     return best_tour, best_tour_length
 
-
-max_it = 20
+max_it = 2000
 num_parts = 50
 inertia = 0.6
 alpha = 0.75
