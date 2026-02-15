@@ -387,27 +387,38 @@ def get_tour_length(position, dist_matrix):
     return sum([dist_matrix[tour[city]][tour[(city+1)%len(tour)]] for city in tour])
 
 
-def PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta):
+def get_best_neighbour(i, particles, t, max_it):
+    radius = 1 + int((t / max_it) * (len(particles) / 2 - 1))
+    best_particle = particles[(i-radius)%len(particles)]
+    for j in range(-radius+1,radius+1):
+        particle = particles[(i+j)%len(particles)]
+        if particle.best_tour_length < best_particle.best_tour_length:
+            best_particle = particle
+    return best_particle
+
+
+def PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start=0.9, inertia_end=0.4, alpha=0.75, beta=2.9):
     particles = []
     best_tour = None
-    best_position = None
     best_tour_length = 100000000000000000
     for _ in range(num_parts):
         particle = Particle(num_cities, dist_matrix)
         particles.append(particle)
         if particle.best_tour_length < best_tour_length:
             best_tour = particle.best_tour
-            best_position = particle.best_position
             best_tour_length = particle.best_tour_length
 
     for t in range(max_it):
-        for particle in particles:
+        inertia = inertia_start - ((inertia_start - inertia_end) * t / max_it)
+
+        for i, particle in enumerate(particles):
             local_best_difference = [x - y for x,y in zip(particle.best_position,particle.position)]
-            global_best_difference = [x - y for x,y in zip(best_position,particle.position)]
+            best_neighbour = get_best_neighbour(i, particles, t, max_it)
+            neighbour_best_difference = [x - y for x,y in zip(best_neighbour.best_position,particle.position)]
 
             old_velocity_component = [inertia * x for x in particle.velocity]
             cognitive_velocity_component = [alpha * epsilon() * x for x in local_best_difference]
-            social_velocity_component = [beta * epsilon() * x for x in global_best_difference]
+            social_velocity_component = [beta * epsilon() * x for x in neighbour_best_difference]
             particle.velocity = [x+y+z for x,y,z in zip(old_velocity_component,cognitive_velocity_component,social_velocity_component)]
 
             particle.position = [x + v for x,v in zip(particle.position,particle.velocity)]
@@ -421,18 +432,14 @@ def PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta):
 
             if particle.best_tour_length < best_tour_length:
                 best_tour = particle.best_tour
-                best_position = particle.best_position
                 best_tour_length = particle.best_tour_length
 
     return best_tour, best_tour_length
 
 max_it = 2000
 num_parts = 50
-inertia = 0.6
-alpha = 0.75
-beta = 2.9
 
-tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta)
+tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts)
 
 
 
