@@ -357,11 +357,16 @@ added_note = ""
 
 import statistics
 
+POS_MIN = -5
+POS_MAX = 5
+VEL_MIN = -1
+VEL_MAX = 1
+
 
 class Particle:
     def __init__(self, num_cities, dist_matrix):
-        self.position = [random.uniform(-5, 5) for _ in range(num_cities)]
-        self.velocity = [random.uniform(-1, 1) for _ in range(num_cities)]
+        self.position = [random.uniform(POS_MIN, POS_MAX) for _ in range(num_cities)]
+        self.velocity = [random.uniform(VEL_MIN, VEL_MAX) for _ in range(num_cities)]
 
         self.normalise_position()
 
@@ -387,6 +392,13 @@ def get_tour_length(position, dist_matrix):
     return sum([dist_matrix[tour[city]][tour[(city+1)%len(tour)]] for city in tour])
 
 
+def get_position_from_tour(tour):
+    position = [0] * len(tour)
+    for index, value in enumerate(tour):
+        position[value] = POS_MIN + (index/len(tour))*(POS_MAX-POS_MIN)
+    return position
+
+
 def get_best_neighbour(i, particles, t, max_it):
     radius = 1 + int((t / max_it) * (len(particles) / 2 - 1))
     best_particle = particles[(i-radius)%len(particles)]
@@ -395,6 +407,30 @@ def get_best_neighbour(i, particles, t, max_it):
         if particle.best_tour_length < best_particle.best_tour_length:
             best_particle = particle
     return best_particle
+
+
+def particle_crossover(particle, neighbour, num_cities, dist_matrix):
+    start = random.randint(0, num_cities-2)
+    end = random.randint(start+1, num_cities)
+    new_tour = [-1] * start + particle.best_tour[start:end] + [-1] * (num_cities-end)
+    added_cities = set(particle.best_tour[start:end])
+    index = 0
+
+    for i in range(len(new_tour)):
+        if new_tour[i] == -1:
+            while neighbour.best_tour[index] in added_cities:
+                index += 1
+            new_tour[i] = neighbour.best_tour[index]
+            added_cities.add(neighbour.best_tour[index])
+    new_tour_length = sum([dist_matrix[new_tour[city]][new_tour[(city+1)%len(new_tour)]] for city in new_tour])
+
+    if new_tour_length < particle.best_tour_length:
+        particle.position = get_position_from_tour(new_tour)
+        particle.normalise_position()
+        particle.best_position = particle.position[:]
+        particle.best_tour = new_tour
+        particle.best_tour_length = new_tour_length
+        particle.velocity = [random.uniform(VEL_MIN, VEL_MAX) for _ in range(num_cities)]
 
 
 def PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start=0.9, inertia_end=0.4, alpha=0.75, beta=2.9):
@@ -430,6 +466,9 @@ def PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start=0.9, inertia_e
                 particle.best_tour = get_tour(particle.position)
                 particle.best_tour_length = new_tour_length
 
+            if random.random() >= 0.95:
+                particle_crossover(particle, best_neighbour, num_cities, dist_matrix)
+
             if particle.best_tour_length < best_tour_length:
                 best_tour = particle.best_tour
                 best_tour_length = particle.best_tour_length
@@ -439,7 +478,7 @@ def PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start=0.9, inertia_e
 max_it = 2000
 num_parts = 50
 
-tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts)
+new_tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts)
 
 
 
@@ -515,12 +554,12 @@ dt_string = now.strftime("%d/%m/%Y-%H:%M:%S")
 added_note = added_note + "DATE-TIME = " + dt_string + ".\n"
 
 flag = "good"
-length = len(tour)
+length = len(new_tour)
 for i in range(0, length):
-    if isinstance(tour[i], int) == False:
+    if isinstance(new_tour[i], int) == False:
         flag = "bad"
     else:
-        tour[i] = int(tour[i])
+        new_tour[i] = int(new_tour[i])
 if flag == "bad":
     print("*** error: Your tour contains non-integer values.")
     sys.exit()
@@ -528,20 +567,20 @@ if isinstance(tour_length, int) == False:
     print("*** error: The tour-length is a non-integer value.")
     sys.exit()
 tour_length = int(tour_length)
-if len(tour) != num_cities:
-    print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
+if len(new_tour) != num_cities:
+    print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(new_tour)) + ".")
     sys.exit()
 flag = "good"
 for i in range(0, num_cities):
-    if not i in tour:
+    if not i in new_tour:
         flag = "bad"
 if flag == "bad":
     print("*** error: Your tour has illegal or repeated city names.")
     sys.exit()
 check_tour_length = 0
 for i in range(0, num_cities - 1):
-    check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
-check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
+    check_tour_length = check_tour_length + dist_matrix[new_tour[i]][new_tour[i + 1]]
+check_tour_length = check_tour_length + dist_matrix[new_tour[num_cities - 1]][new_tour[0]]
 if tour_length != check_tour_length:
     print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
     sys.exit()
@@ -555,9 +594,9 @@ len_dt_string = len(dt_string)
 date_time_number = 0
 for i in range(0, len_dt_string):
     date_time_number = date_time_number + ord(dt_string[i])
-tour_diff = abs(tour[0] - tour[num_cities - 1])
+tour_diff = abs(new_tour[0] - new_tour[num_cities - 1])
 for i in range(0, num_cities - 1):
-    tour_diff = tour_diff + abs(tour[i + 1] - tour[i])
+    tour_diff = tour_diff + abs(new_tour[i + 1] - new_tour[i])
 certificate = user_number + alg_number + date_time_number + tour_diff
 local_time = time.asctime(time.localtime(time.time()))
 output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
@@ -571,9 +610,9 @@ f = open(output_file_name,'w')
 f.write("USER = {0} ({1} {2}),\n".format(my_user_name, my_first_name, my_last_name))
 f.write("ALGORITHM CODE = {0}, NAME OF CITY-FILE = {1},\n".format(algorithm_code, input_file))
 f.write("SIZE = {0}, TOUR LENGTH = {1},\n".format(num_cities, tour_length))
-f.write(str(tour[0]))
+f.write(str(new_tour[0]))
 for i in range(1,num_cities):
-    f.write(",{0}".format(tour[i]))
+    f.write(",{0}".format(new_tour[i]))
 f.write(",\nNOTE = {0}".format(added_note))
 f.write("CERTIFICATE = {0}.\n".format(certificate))
 f.close()
