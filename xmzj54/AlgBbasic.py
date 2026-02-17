@@ -270,7 +270,7 @@ print("The codes and tariffs have been read from 'alg_codes_and_tariffs.txt':")
 ############
 ############ END OF SECTOR 5 (IGNORE THIS COMMENT)
 
-my_user_name = "abcd12"
+my_user_name = "xmzj54"
 
 ############ START OF SECTOR 6 (IGNORE THIS COMMENT)
 ############
@@ -357,88 +357,185 @@ added_note = ""
 
 import math
 
-
+# --- HYPERPARAMETERS ---
+# Limits the size of the swap sequence to prevent "Velocity Explosion"
+# where the list of swaps becomes too long to compute efficiently.
 INITIAL_VELOCITY_LEN = 10
 MAX_VELOCITY_LEN = 100
+
+max_it = 20000
+num_parts = 50
+inertia = 0.6
+alpha = 0.75
+beta = 2.9
 
 
 class Particle():
     def __init__(self, num_cities, dist_matrix):
-        tour = list(range(1,num_cities))
+        # 1. Initialise Position (The Tour)
+        # Create a random valid permutation of cities
+        tour = list(range(1, num_cities))
         random.shuffle(tour)
+        # Always start at city 0 (Fixed Start/End point)
         self.position = [0] + tour
+        
+        # Initialise Personal Best (pBest)
         self.best_position = self.position[:]
+        
+        # 2. Initialise Velocity (Swap Sequence)
+        # A list of random swap indices. 
+        # e.g., [4, 1] means swap(4,5) then swap(1,2)
         self.velocity = []
         for i in range(INITIAL_VELOCITY_LEN):
-            index = random.randint(1,num_cities-2)
+            index = random.randint(1, num_cities - 2)
             self.velocity.append(index)
+            
+        # Calculate Initial Fitness
+        # Sum of distances between consecutive cities
         self.best_tour_length = sum([dist_matrix[self.position[i]][self.position[(i+1)%num_cities]] for i in range(num_cities)])
 
     def move(self):
+        """
+        APPLY VELOCITY
+        Executes the list of swaps stored in self.velocity to modify the position.
+        This effectively 'moves' the particle in the discrete search space.
+        """
         for index in self.velocity:
+            # Perform a swap of adjacent elements at 'index' and 'index+1'
             self.position[index], self.position[index+1] = self.position[index+1], self.position[index]
 
     def update_best_position(self, num_cities, dist_matrix):
+        """
+        EVALUATION & MEMORY UPDATE
+        Checks if the current position is better than the Personal Best.
+        """
         new_tour_length = sum([dist_matrix[self.position[i]][self.position[(i+1)%num_cities]] for i in range(num_cities)])
+        
         if new_tour_length < self.best_tour_length:
             self.best_tour_length = new_tour_length
-            self.best_position = self.position[:]
+            self.best_position = self.position[:] # Copy the list
 
 
 def positions_difference(position1, position2):
+    """
+    VECTOR SUBTRACTION (A - B)
+    Calculates the 'Distance' between two permutations.
+    Returns the sequence of swaps required to transform position2 into position1.
+    Logic: This mimics Bubble Sort. We move elements in pos2 until they match pos1.
+    """
     velocity = []
-    position2 = position2[:]
-    target_indices = {city:i for i,city in enumerate(position1)}
-    for i in range(len(position2)-1):
-        for j in range(1,len(position2)-i-1):
+    position2 = position2[:] # Work on a copy
+    
+    # Map each city to its target index in position1
+    target_indices = {city: i for i, city in enumerate(position1)}
+    
+    # Iterate through the tour and swap elements until they align with target
+    for i in range(len(position2) - 1):
+        for j in range(1, len(position2) - i - 1):
+            # If the current element should be after the next element, swap them
             if target_indices[position2[j]] > target_indices[position2[j+1]]:
-                velocity.append(j)
+                velocity.append(j) # Record the swap
                 position2[j], position2[j+1] = position2[j+1], position2[j]
+    
     return velocity
 
 
 def epsilon():
+    """Stochastic component (Uniform Random [0, 2])."""
     return random.random() * 2
 
 
 def multiply_velocity(scalar, velocity):
+    """
+    SCALAR MULTIPLICATION (c * V)
+    Since we cannot multiply a "Swap" by a float, we interpret this as:
+    - If c < 1: Keep only the first c% of the swaps.
+    - If c > 1: Repeat the sequence of swaps multiple times.
+    """
     if scalar < 1:
-        return velocity[:int(scalar*len(velocity))]
+        # Truncate: Keep only the first portion of the sequence
+        return velocity[:int(scalar * len(velocity))]
     elif scalar > 1:
+        # Extend: Repeat the sequence + a fraction of it
         fraction, integer = math.modf(scalar)
-        return velocity * int(integer) + velocity[:int(fraction*len(velocity))]
+        return velocity * int(integer) + velocity[:int(fraction * len(velocity))]
+    
     return velocity
 
 
 def normalise_velocity(velocity, num_cities):
+    """
+    VELOCITY NORMALISATION (Optimisation)
+    If the swap sequence becomes too long (Velocity Explosion), it becomes computationally 
+    expensive to execute. This function simplifies the sequence.
+    Logic: It applies the full sequence to a dummy tour, then calculates the 
+    shortest new sequence needed to achieve that same result.
+    """
+    # 1. Apply the long velocity to a standard identity tour
     initial_position = list(range(0, num_cities))
     final_position = initial_position[:]
+    
     for city in velocity:
         final_position[city], final_position[city+1] = final_position[city+1], final_position[city]
+        
+    # 2. Recalculate the minimal set of swaps to get there
     return positions_difference(final_position, initial_position)
 
 
 def PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta):
+    func_start_time = time.time()
+    time_limit = 55 # Safety buffer
+
+    # --- INITIALISATION ---
     particles = []
     best_tour = None
     best_tour_length = 1000000000000
+    
     for _ in range(num_parts):
         particle = Particle(num_cities, dist_matrix)
         particles.append(particle)
+        # Track Global Best
         if particle.best_tour_length < best_tour_length:
-            best_tour = particle.position
+            best_tour = particle.position # Note: we store the position directly
             best_tour_length = particle.best_tour_length
 
+    # --- MAIN LOOP ---
     for t in range(max_it):
+        # Termination check
+        if time.time() - func_start_time > time_limit:
+            break
+
         for particle in particles:
-            particle.velocity = (multiply_velocity(inertia, particle.velocity)
-                                 + multiply_velocity(alpha*epsilon(), positions_difference(particle.best_position, particle.position))
-                                 + multiply_velocity(beta*epsilon(), positions_difference(best_tour, particle.position))
-                                 )
+            if time.time() - func_start_time > time_limit:
+                break
+
+            # 1. CALCULATE DISCRETE VELOCITY
+            # v(t+1) = (w * v) + (c1 * r1 * (pBest - x)) + (c2 * r2 * (gBest - x))
+            
+            # Term 1: Inertia (Keep a portion of previous swaps)
+            term1 = multiply_velocity(inertia, particle.velocity)
+            
+            # Term 2: Cognitive (Swaps to get closer to pBest)
+            diff_pbest = positions_difference(particle.best_position, particle.position)
+            term2 = multiply_velocity(alpha * epsilon(), diff_pbest)
+            
+            # Term 3: Social (Swaps to get closer to gBest)
+            diff_gbest = positions_difference(best_tour, particle.position)
+            term3 = multiply_velocity(beta * epsilon(), diff_gbest)
+            
+            # Concatenate the swap lists
+            particle.velocity = term1 + term2 + term3
+
+            # 2. VELOCITY CAP
+            # If the list of swaps is too long, simplify it to prevent lag
             if len(particle.velocity) > MAX_VELOCITY_LEN:
                 particle.velocity = normalise_velocity(particle.velocity, num_cities)
+            
+            # 3. MOVE & EVALUATE
             particle.move()
             particle.update_best_position(num_cities, dist_matrix)
+            
+            # Update Global Best
             if particle.best_tour_length < best_tour_length:
                 best_tour_length = particle.best_tour_length
                 best_tour = particle.best_position
@@ -446,12 +543,7 @@ def PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta):
     return best_tour, best_tour_length
 
 
-max_it = 20
-num_parts = 50
-inertia = 0.6
-alpha = 0.75
-beta = 2.9
-
+# Run the Basic PSO
 tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts, inertia, alpha, beta)
 
 

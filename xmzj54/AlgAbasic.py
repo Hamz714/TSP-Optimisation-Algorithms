@@ -355,30 +355,65 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-import random
-
+# Constant for minimum pheromone level to prevent trails from reaching 0
 TAU_MIN = 1e-12
 
+# =============================================================================
+# ALGORITHM PARAMETERS (Rank-Based Ant System)
+# =============================================================================
+# max_it: Maximum number of iterations (safety stop)
+max_it = 2000
+# num_ants: Number of ants per iteration (set equal to number of cities)
+num_ants = num_cities 
+# alpha: Importance of pheromone trail (exploitation)
+alpha = 1
+# beta: Importance of heuristic information (exploration/greedy)
+beta = 3
+# decay_rate: Pheromone evaporation rate (rho), controls memory of the colony
+decay_rate = 0.1
+# w: Number of elite ants used in Rank-Based update (e.g., top 6)
+w = 6
+
+
 class Ant:
+    """
+    Represents a single ant agent.
+    Maintains memory of its current tour, visited cities, and total length.
+    """
     def __init__(self, num_cities):
+        # Start at a random city to promote search diversity
         self.start = self.current = random.randint(0, num_cities-1)
         self.visited = [self.start]
+        # List of unvisited cities to choose from
         self.unvisited = [_ for _ in range(num_cities) if _ != self.start]
         self.tour_length = 0
 
     def move(self, city, dist_matrix):
+        """
+        Moves the ant to a specific city and updates state.
+        """
         self.tour_length += dist_matrix[self.current][city]
         self.current = city
         self.visited.append(city)
         self.unvisited.remove(city)
 
     def close(self, dist_matrix):
+        """
+        Completes the tour by returning to the start city.
+        """
         self.tour_length += dist_matrix[self.current][self.start]
 
 
 def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
+    """
+    Calculates the initial pheromone level (tau_0).
+    Uses the standard initialization formula for Rank-Based AS:
+    tau_0 = 0.5 * w * (w-1) / (rho * L_nn)
+    Where L_nn is the tour length of a Nearest Neighbour heuristic.
+    """
     best_nearest_neighbour_length = 1000000000000000000
 
+    # Execute Nearest Neighbour heuristic from every city to find a robust L_nn
     for start_node in range(num_cities):
         current_node = start_node
         unvisited = [_ for _ in range(num_cities) if _ != start_node]
@@ -386,6 +421,7 @@ def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
 
         while unvisited:
             min_distance = 100000000000000000000000
+            min_node = -1
             for node in unvisited:
                 if dist_matrix[current_node][node] < min_distance:
                     min_distance = dist_matrix[current_node][node]
@@ -395,18 +431,23 @@ def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
             unvisited.remove(min_node)
         nearest_neighbour_length += dist_matrix[current_node][start_node]
 
+        # Keep the best length found
         best_nearest_neighbour_length = min(best_nearest_neighbour_length, nearest_neighbour_length)
 
+    # Return calculated tau_0
     return 0.5 * w * (w-1) / (decay_rate * best_nearest_neighbour_length)
 
 
 def generate_pheromone_matrix(initial_pheromone, num_cities):
+    """
+    Initializes the pheromone matrix with the calculated tau_0.
+    """
     pheromone_matrix = []
     for i in range(num_cities):
         pheromone_node = []
         for j in range(num_cities):
             if i == j:
-                pheromone_node.append(0)
+                pheromone_node.append(0) # No pheromone on self-loops
             else:
                 pheromone_node.append(initial_pheromone)
         pheromone_matrix.append(pheromone_node)
@@ -414,39 +455,77 @@ def generate_pheromone_matrix(initial_pheromone, num_cities):
 
 
 def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
+    """
+    Main loop for Rank-Based Ant System (AS_rank).
+    """
+    func_start_time = time.time()
+    time_limit = 55 # Safety buffer to ensure termination within 60s
+
+    # Initialisation Phase
     initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
     pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
 
     best_tour = []
     best_tour_length = 1000000000000000000000000000000
-    for t in range(max_it):
-        ants = [Ant(num_cities) for _ in range(num_ants)]
 
+    # --- MAIN ITERATION LOOP ---
+    for t in range(max_it):
+        # CRITICAL: Check time limit at start of iteration
+        if time.time() - func_start_time > time_limit:
+            break
+
+        ants = [Ant(num_cities) for _ in range(num_ants)]
+        time_aborted = False
+
+        # --- SOLUTION CONSTRUCTION ---
         for ant in ants:
+            # Check time limit during construction for large instances
+            if time.time() - func_start_time > time_limit:
+                time_aborted = True
+                break
+
             while len(ant.visited) < num_cities:
                 scores = []
+                # Calculate probability for all unvisited cities
+                # Formula: P_ij = [tau_ij]^alpha * [eta_ij]^beta
                 for edge in ant.unvisited:
                     distance = dist_matrix[ant.visited[-1]][edge]
                     if distance == 0:
-                        heuristic = 1e6
+                        heuristic = 1e6 # Handle 0 distance safely
                     else:
                         heuristic = 1 / distance
+                    
                     edge_score = pheromone_matrix[ant.visited[-1]][edge]**alpha * heuristic**beta
                     scores.append(edge_score)
 
+                # Stochastic selection (Roulette Wheel)
                 city_chosen = random.choices(ant.unvisited, weights=scores, k=1)[0]
                 ant.move(city_chosen, dist_matrix)
             ant.close(dist_matrix)
 
+        if time_aborted:
+            break
+
+        # --- RANKING ---
+        # Sort ants by tour length (shorter is better)
+        # This is the core mechanism of Rank-Based AS
         ants.sort(key=lambda ant: ant.tour_length)
+        
+        # Update Global Best if current iteration produced a better tour
         if ants[0].tour_length < best_tour_length:
             best_tour = ants[0].visited[:]
             best_tour_length = ants[0].tour_length
 
+        # --- EVAPORATION ---
+        # Reduce pheromone on all edges by decay_rate
         for i in range(len(pheromone_matrix)):
             for j in range(len(pheromone_matrix[0])):
                 pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*(1-decay_rate))
 
+        # --- RANK-BASED PHEROMONE UPDATE ---
+        # Only the top 'w' ranked ants deposit pheromone.
+        # The amount is weighted by (w - rank).
+        # Rank 0 (Best) deposits w/L. Rank 1 deposits (w-1)/L. etc.
         for rank, ant in enumerate(ants[:w]):
             for i in range(len(ant.visited)-1):
                 pheromone_matrix[ant.visited[i]][ant.visited[i+1]] += (w - rank) / ant.tour_length
@@ -454,6 +533,9 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
             pheromone_matrix[ant.visited[-1]][ant.visited[0]] += (w - rank) / ant.tour_length  
             pheromone_matrix[ant.visited[0]][ant.visited[-1]] += (w - rank) / ant.tour_length  
 
+        # --- ELITIST PHEROMONE UPDATE ---
+        # The global best tour deposits additional pheromone with weight 'w'.
+        # This ensures the best-found path is always strongly reinforced.
         for i in range(len(best_tour)-1):
             pheromone_matrix[best_tour[i]][best_tour[i+1]] += w / best_tour_length
             pheromone_matrix[best_tour[i+1]][best_tour[i]] += w / best_tour_length
@@ -461,15 +543,6 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w):
         pheromone_matrix[best_tour[0]][best_tour[-1]] += w / best_tour_length
 
     return best_tour, best_tour_length
-
-
-
-max_it = 2000
-num_ants = num_cities
-alpha = 1
-beta = 2.5
-decay_rate = 0.1
-w = 6
 
 tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w)
 

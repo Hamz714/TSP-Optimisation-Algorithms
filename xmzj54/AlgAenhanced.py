@@ -355,32 +355,67 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-import random
-from datetime import timedelta
-
+# Constant for minimum pheromone level to prevent division by zero or total stagnation
 TAU_MIN = 1e-12
 
+# =============================================================================
+# ALGORITHM PARAMETERS
+# =============================================================================
+# max_it: Maximum iterations (safety limit, usually terminated by timer first)
+max_it = 2000
+# num_ants: Number of ants per iteration (set to number of cities)
+num_ants = num_cities 
+# alpha: Importance of pheromone trail (exploitation)
+alpha = 1
+# beta: Importance of heuristic information (exploration/greedy) [cite: 557]
+beta = 3
+# decay_rate: Pheromone evaporation rate (rho) [cite: 269]
+decay_rate = 0.1
+# w: Number of elite ants used in Rank-Based update [cite: 758]
+w = 6
+# similarity_threshold: Genotypic overlap % required to trigger stagnation recovery
+similarity_threshold = 0.95
+# smoothing_factor: Strength of pheromone reset (0.5 = 50% reset to baseline)
+smoothing_factor = 0.5
+
+
 class Ant:
+    """
+    Represents a single ant agent in the colony.
+    Maintains its own memory of visited cities and current tour length.
+    """
     def __init__(self, num_cities):
+        # Start at a random city to ensure diversity in search start points
         self.start = self.current = random.randint(0, num_cities-1)
         self.visited = [self.start]
+        # Use a set for O(1) lookups when checking if a city is unvisited
         self.unvisited = set(range(num_cities))
         self.unvisited.remove(self.start)
         self.tour_length = 0
 
     def move(self, city, dist_matrix):
+        """
+        Moves the ant to a specific city and updates internal state.
+        """
         self.tour_length += dist_matrix[self.current][city]
         self.current = city
         self.visited.append(city)
         self.unvisited.remove(city)
 
     def close(self, dist_matrix):
+        """
+        Completes the tour by returning to the start city.
+        """
         self.tour_length += dist_matrix[self.current][self.start]
 
 
 def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
+    """
+    Calculates the initial pheromone level (tau_0) based on a Nearest Neighbour heuristic.
+    """
     best_nearest_neighbour_length = 1000000000000000000
 
+    # Run NN heuristic from every city to find a reliable baseline L_nn
     for start_node in range(num_cities):
         current_node = start_node
         unvisited = [_ for _ in range(num_cities) if _ != start_node]
@@ -388,6 +423,7 @@ def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
 
         while unvisited:
             min_distance = 100000000000000000000000
+            min_node = -1
             for node in unvisited:
                 if dist_matrix[current_node][node] < min_distance:
                     min_distance = dist_matrix[current_node][node]
@@ -399,16 +435,20 @@ def get_initial_pheromone(dist_matrix, num_cities, decay_rate, w):
 
         best_nearest_neighbour_length = min(best_nearest_neighbour_length, nearest_neighbour_length)
 
+    # Return the calculated initial pheromone value
     return 0.5 * w * (w-1) / (decay_rate * best_nearest_neighbour_length)
 
 
 def generate_pheromone_matrix(initial_pheromone, num_cities):
+    """
+    Initializes the pheromone matrix with tau_0 on all edges.
+    """
     pheromone_matrix = []
     for i in range(num_cities):
         pheromone_node = []
         for j in range(num_cities):
             if i == j:
-                pheromone_node.append(0)
+                pheromone_node.append(0) # No self-loops
             else:
                 pheromone_node.append(initial_pheromone)
         pheromone_matrix.append(pheromone_node)
@@ -416,6 +456,9 @@ def generate_pheromone_matrix(initial_pheromone, num_cities):
 
 
 def calculate_tour_length(dist_matrix, tour):
+    """
+    Utility to calculate total length of a completed tour.
+    """
     tour_length = 0
     for i in range(len(tour)-1):
         tour_length += dist_matrix[tour[i]][tour[i+1]]
@@ -424,28 +467,40 @@ def calculate_tour_length(dist_matrix, tour):
 
 
 def two_opt(dist_matrix, tour, tour_length):
+    """
+    ENHANCEMENT 1: 2-Opt Local Search (First Improvement).
+    Systematically swaps edges (i, i+1) and (j, j+1) to remove crossing paths.
+    Used on elite ants to refine their solutions.
+    """
     improved = True
     while improved:
         improved = False
         for i in range(len(tour)-1):
             for j in range(i+2, len(tour)):
                 if j == len(tour) - 1 and i == 0:
-                    continue
+                    continue # Skip wrapping edge case for simplicity
 
+                # Calculate cost of current edges vs new swapped edges
                 current_cost = dist_matrix[tour[i]][tour[i+1]] + dist_matrix[tour[j]][tour[(j+1) % len(tour)]]
                 new_cost = dist_matrix[tour[i]][tour[j]] + dist_matrix[tour[i+1]][tour[(j+1) % len(tour)]]
 
                 if new_cost < current_cost:
+                    # Perform the swap (reverse the segment between i+1 and j)
                     tour[i+1:j+1] = tour[i+1:j+1][::-1]
                     tour_length += new_cost - current_cost
                     improved = True
-                    break
+                    break # First improvement strategy
             if improved:
                 break
     return tour, tour_length
 
 
 def two_opt_best(dist_matrix, tour, tour_length):
+    """
+    ENHANCEMENT 1 (Variant): 2-Opt Local Search (Best Improvement).
+    Scans ALL possible swaps to find the single best reduction before applying it.
+    Applied only to the iteration-best ant due to higher computational cost.
+    """
     improved = True
     while improved:
         improved = False
@@ -462,6 +517,7 @@ def two_opt_best(dist_matrix, tour, tour_length):
 
                 if delta > best_delta:
                     best_i, best_j = i, j
+                    best_delta = delta # Track maximum improvement
                     improved = True
 
         if improved:
@@ -472,6 +528,11 @@ def two_opt_best(dist_matrix, tour, tour_length):
 
 
 def generate_candidates(dist_matrix, num_cities, beta, n=20):
+    """
+    ENHANCEMENT 2: Candidate Lists.
+    Pre-calculates the nearest 'n' neighbors for every city.
+    Includes pre-computed heuristic values (1/d)^beta to speed up probability calculation.
+    """
     candidates = []
     candidates_number = min(num_cities, n)
     for i in range(num_cities):
@@ -483,16 +544,26 @@ def generate_candidates(dist_matrix, num_cities, beta, n=20):
                     heuristic = 1e6
                 else:
                     heuristic = 1 / distance
+                # Store tuple: (city_index, pre_calculated_heuristic_power)
                 row.append([j, heuristic**beta])
+        # Sort by heuristic desirability (nearest first) and truncate to 'n'
         row = sorted(row, key=lambda x: x[1], reverse=True)[:candidates_number]
         candidates.append(row)
     return candidates
 
 
 def determine_similarity(ants):
+    """
+    ENHANCEMENT 3: Genotypic Diversity Metric.
+    Calculates the percentage of shared edges between the Best Ant (Rank 0)
+    and the Median Ant (Rank N/2). 
+    High overlap (>95%) indicates the colony has collapsed onto a single path (stagnation).
+    """
     best = ants[0].visited
     median = ants[len(ants)//2].visited
 
+    # Convert best tour to a set of sorted edge tuples for O(1) lookup
+    # Sorted tuples ((u,v)) ensure direction doesn't matter: (1,2) == (2,1)
     edges_best = set()
     for i in range(len(best)):
         u, v = best[i], best[(i + 1) % len(best)]
@@ -501,44 +572,59 @@ def determine_similarity(ants):
     same = 0
     for i in range(len(median)):
         u, v = median[i], median[(i + 1) % len(median)]
+        # Check if median ant's edge exists in best ant's tour
         if tuple(sorted((u, v))) in edges_best:
             same += 1
 
+    # Return ratio of shared edges
     similarity = same / len(median)
     return similarity
 
 
 def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, similarity_threshold, smoothing_factor):
+    """
+    Main Loop: Rank-Based Ant System with Elitist Update and Stagnation Recovery.
+    """
+    func_start_time = time.time()
+    time_limit = 55 # Safety buffer to ensure termination within 60s
+
     initial_pheromone = get_initial_pheromone(dist_matrix, num_cities, decay_rate, w)
     pheromone_matrix = generate_pheromone_matrix(initial_pheromone, num_cities)
     candidates = generate_candidates(dist_matrix, num_cities, beta)
 
-    now = datetime.now()
-    end_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-    if end_time <= now:
-        end_time += timedelta(days=1)
-    iteration = 0
-
     best_tour = []
     best_tour_length = 1000000000000000000000000000000
-    # for t in range(max_it):
-    while datetime.now() < end_time:
-        iteration += 1
-        ants = [Ant(num_cities) for _ in range(num_ants)]
 
+    for t in range(max_it):
+        # Strict time check per iteration
+        if time.time() - func_start_time > time_limit:
+            break
+
+        ants = [Ant(num_cities) for _ in range(num_ants)]
+        time_aborted = False
+
+        # --- CONSTRUCT SOLUTIONS ---
         for ant in ants:
+            # Check timer during ant construction for large instances
+            if time.time() - func_start_time > time_limit:
+                time_aborted = True
+                break
+
             while len(ant.visited) < num_cities:
                 possible_moves = []
                 scores = []
+                
+                # Use Candidate List (Enhancement 2) for next city selection
                 unvisited_candidates = [candidate for candidate in candidates[ant.visited[-1]] if candidate[0] in ant.unvisited]
 
                 if unvisited_candidates:
+                    # Choose from candidates (fast)
                     for city,heuristic in unvisited_candidates:
                         city_score = pheromone_matrix[ant.visited[-1]][city]**alpha * heuristic
                         possible_moves.append(city)
                         scores.append(city_score)
-                    
                 else:
+                    # Fallback to full scan if candidate list is exhausted
                     for city in ant.unvisited:
                         distance = dist_matrix[ant.visited[-1]][city]
                         if distance == 0:
@@ -549,32 +635,50 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, s
                         possible_moves.append(city)
                         scores.append(edge_score)
 
+                # Stochastic selection based on scores (Roulette Wheel)
                 city_chosen = random.choices(possible_moves, weights=scores, k=1)[0]
                 ant.move(city_chosen, dist_matrix)
             ant.close(dist_matrix)
 
+        if time_aborted:
+            break
+
+        # Sort ants by tour length (Ascending) for Ranking
         ants.sort(key=lambda ant: ant.tour_length)
 
+        # --- LOCAL SEARCH (Enhancement 1) ---
+        # Apply Best-Improvement 2-Opt to the single best ant
         ants[0].visited, ants[0].tour_length = two_opt_best(dist_matrix, ants[0].visited, ants[0].tour_length)
+        # Apply First-Improvement 2-Opt to the remaining elite ants (ranks 1 to w-1)
         for ant in ants[1:w]:
             ant.visited, ant.tour_length = two_opt(dist_matrix, ant.visited, ant.tour_length)
 
+        # Re-sort elites to ensure the best ant is still at index 0 after local search
         ants[:w] = sorted(ants[:w], key=lambda ant: ant.tour_length)
 
+        # Update Global Best
         if ants[0].tour_length < best_tour_length:
             best_tour = ants[0].visited[:]
             best_tour_length = ants[0].tour_length
 
+        # --- STAGNATION RECOVERY (Enhancement 3) ---
+        # If genotypic similarity > 95%, smooth pheromones to force exploration
         if determine_similarity(ants) > similarity_threshold:
             for row in range(len(pheromone_matrix)):
                 for column in range(len(pheromone_matrix[0])):
                     if row != column:
+                        # Linear interpolation between current trail and initial baseline
                         pheromone_matrix[row][column] = smoothing_factor * initial_pheromone + (1-smoothing_factor) * pheromone_matrix[row][column]
 
+        # --- EVAPORATION ---
+        # Decrease all pheromones by decay_rate (rho)
         for i in range(len(pheromone_matrix)):
             for j in range(len(pheromone_matrix[0])):
                 pheromone_matrix[i][j] = max(TAU_MIN, pheromone_matrix[i][j]*(1-decay_rate))
 
+        # --- RANK-BASED DEPOSIT ---
+        # Only the top w ants deposit pheromone
+        # Weighting is (w - rank), favoring better ants
         for rank, ant in enumerate(ants[:w]):
             for i in range(len(ant.visited)-1):
                 pheromone_matrix[ant.visited[i]][ant.visited[i+1]] += (w - rank) / ant.tour_length
@@ -582,28 +686,17 @@ def ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, s
             pheromone_matrix[ant.visited[-1]][ant.visited[0]] += (w - rank) / ant.tour_length  
             pheromone_matrix[ant.visited[0]][ant.visited[-1]] += (w - rank) / ant.tour_length  
 
+        # --- ELITIST DEPOSIT ---
+        # Reinforce the global best tour with weight w
         for i in range(len(best_tour)-1):
             pheromone_matrix[best_tour[i]][best_tour[i+1]] += w / best_tour_length
             pheromone_matrix[best_tour[i+1]][best_tour[i]] += w / best_tour_length
         pheromone_matrix[best_tour[-1]][best_tour[0]] += w / best_tour_length
         pheromone_matrix[best_tour[0]][best_tour[-1]] += w / best_tour_length
 
-    print(f"Iterations: {iteration}")
     return best_tour, best_tour_length
 
-
-
-max_it = 250
-num_ants = num_cities
-alpha = 1
-beta = 3
-decay_rate = 0.1
-w = 6
-similarity_threshold = 0.95
-smoothing_factor = 0.5
-
 tour, tour_length = ACO(dist_matrix, num_cities, max_it, num_ants, alpha, beta, decay_rate, w, similarity_threshold, smoothing_factor)
-
 
 
 

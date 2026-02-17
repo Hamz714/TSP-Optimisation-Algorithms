@@ -1,8 +1,0 @@
-USER = xmzj54 (Hamzah Ibrahim),
-ALGORITHM CODE = AC, NAME OF CITY-FILE = AISearchfile012.txt,
-SIZE = 12, TOUR LENGTH = 61,
-7,3,6,2,1,11,9,5,8,10,0,4,
-NOTE = The parameter values are 'max_it' = 200 and 'num_ants' = 100.
-RUN-TIME = 1.0 seconds.
-DATE-TIME = 30/01/2026-18:17:36.
-CERTIFICATE = 1711.

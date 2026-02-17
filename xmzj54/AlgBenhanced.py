@@ -270,7 +270,7 @@ print("The codes and tariffs have been read from 'alg_codes_and_tariffs.txt':")
 ############
 ############ END OF SECTOR 5 (IGNORE THIS COMMENT)
 
-my_user_name = "abcd12"
+my_user_name = "xmzj54"
 
 ############ START OF SECTOR 6 (IGNORE THIS COMMENT)
 ############
@@ -357,42 +357,78 @@ added_note = ""
 
 import statistics
 
+# --- HYPERPARAMETERS & CONSTANTS ---
+# Search space boundaries for Random Key Encoding.
+# A range of [-5, 5] provides sufficient granularity for floating point sorting.
 POS_MIN = -5
 POS_MAX = 5
 VEL_MIN = -1
 VEL_MAX = 1
 
+# Hyperparameters for the swarm physics.
+max_it = 20000
+num_parts = 50
+inertia_start = 0.9  # High initial energy for global exploration
+inertia_end = 0.4    # Low final energy for local exploitation
+alpha = 0.75         # Cognitive coefficient (Personal Memory)
+beta = 2.9           # Social coefficient (Swarm Influence)
+
 
 class Particle:
     def __init__(self, num_cities, dist_matrix):
+        # Initialise position vectors with uniform random distribution
         self.position = [random.uniform(POS_MIN, POS_MAX) for _ in range(num_cities)]
         self.velocity = [random.uniform(VEL_MIN, VEL_MAX) for _ in range(num_cities)]
 
+        # CRITICAL ENHANCEMENT 1: Normalisation
+        # Immediately center the particle to preventing initial drift.
         self.normalise_position()
 
+        # Initialise Personal Best (pBest) memory
         self.best_position = self.position[:]
         self.best_tour = get_tour(self.best_position)
         self.best_tour_length = get_tour_length(self.best_position, dist_matrix)
 
     def normalise_position(self):
+        """
+        ENHANCEMENT 1: SUBSPACE PROJECTION
+        Random Key Encoding is translation invariant (adding +C to all elements 
+        does not change the sorted order/tour). This causes particles to drift 
+        towards +/- infinity over time. 
+        This function projects the particle onto the hyperplane sum(x) = 0, 
+        removing drift and ensuring numerical stability.
+        """
         mean = statistics.mean(self.position)
         self.position = [x-mean for x in self.position]
     
 
 def epsilon():
+    """Stochastic component for velocity updates (Uniform [0, 2])."""
     return random.random() * 2
 
 
 def get_tour(position):
+    """
+    ENHANCEMENT 1: RANDOM KEY ENCODING
+    Maps the continuous position vector to a discrete permutation (Tour).
+    We sort the indices based on the float values in 'position'.
+    """
     return sorted(range(len(position)), key=lambda i: position[i])
 
 
 def get_tour_length(position, dist_matrix):
+    """Calculates the total distance of the tour encoded by the position."""
     tour = get_tour(position)
+    # Sum distance between consecutive cities, including return to start
     return sum([dist_matrix[tour[city]][tour[(city+1)%len(tour)]] for city in tour])
 
 
 def get_position_from_tour(tour):
+    """
+    INVERSE MAPPING (Used in Crossover)
+    Converts a discrete permutation (Tour) back into a continuous position vector.
+    Assigns values linearly from POS_MIN to POS_MAX based on rank in the tour.
+    """
     position = [0] * len(tour)
     for index, value in enumerate(tour):
         position[value] = POS_MIN + (index/len(tour))*(POS_MAX-POS_MIN)
@@ -400,85 +436,153 @@ def get_position_from_tour(tour):
 
 
 def get_best_neighbour(i, particles, t, max_it):
+    """
+    ENHANCEMENT 2: DYNAMIC TOPOLOGY
+    Implements a gradual Time-Varying Communication Graph.
+    - Early Game: Radius is small (Ring Topology). Promotes diversity/exploration.
+    - Late Game: Radius is large (Star Topology). Promotes convergence/exploitation.
+    """
+    # Linearly interpolate radius from 1 to N/2 based on iteration progress
     radius = 1 + int((t / max_it) * (len(particles) / 2 - 1))
+    
+    # Identify the start of the sliding window (Ring Lattice logic)
     best_particle = particles[(i-radius)%len(particles)]
+    
+    # Scan the neighborhood window
     for j in range(-radius+1,radius+1):
         particle = particles[(i+j)%len(particles)]
+        # Compare Personal Bests (Memory), not current positions
         if particle.best_tour_length < best_particle.best_tour_length:
             best_particle = particle
     return best_particle
 
 
 def particle_crossover(particle, neighbour, num_cities, dist_matrix):
+    """
+    ENHANCEMENT 3: GENETIC PARTICLE CROSSOVER (Order Crossover - OX1)
+    Hybridises PSO with Evolutionary Computation to escape local optima.
+    Breeds the particle with its best neighbor to jump to a new structural basin.
+    """
+    # Select random cut points for the sub-tour slice
     start = random.randint(0, num_cities-2)
     end = random.randint(start+1, num_cities)
+    
+    # 1. Inherit slice from Parent 1 (Self)
+    # Preserves relative ordering of a sub-sequence
     new_tour = [-1] * start + particle.best_tour[start:end] + [-1] * (num_cities-end)
+    
+    # OPTIMISATION: Use a HashSet for O(1) lookups instead of O(N) list scanning
     added_cities = set(particle.best_tour[start:end])
     index = 0
 
+    # 2. Fill remaining slots from Parent 2 (Neighbor)
+    # Preserves relative ordering of the remaining cities
     for i in range(len(new_tour)):
         if new_tour[i] == -1:
+            # Skip cities already in the child
             while neighbour.best_tour[index] in added_cities:
                 index += 1
             new_tour[i] = neighbour.best_tour[index]
             added_cities.add(neighbour.best_tour[index])
+    
+    # 3. Evaluate the Offspring
     new_tour_length = sum([dist_matrix[new_tour[city]][new_tour[(city+1)%len(new_tour)]] for city in new_tour])
 
+    # 4. Elitist Selection
+    # Only replace the parent if the offspring is strictly better than the parent's memory
     if new_tour_length < particle.best_tour_length:
+        # Inverse Map the tour back to continuous space
         particle.position = get_position_from_tour(new_tour)
+        # Re-center (Normalisation) to maintain subspace constraint
         particle.normalise_position()
+        
+        # Update Personal Best (Memory)
         particle.best_position = particle.position[:]
         particle.best_tour = new_tour
         particle.best_tour_length = new_tour_length
+        
+        # Reset Velocity to prevent old momentum from interfering with new location
         particle.velocity = [random.uniform(VEL_MIN, VEL_MAX) for _ in range(num_cities)]
 
 
-def PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start=0.9, inertia_end=0.4, alpha=0.75, beta=2.9):
+def PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start, inertia_end, alpha, beta):
+    func_start_time = time.time()
+    time_limit = 55  # Safety buffer (Code must terminate < 60s)
+
+    # --- INITIALISATION ---
     particles = []
     best_tour = None
     best_tour_length = 100000000000000000
+    
     for _ in range(num_parts):
         particle = Particle(num_cities, dist_matrix)
         particles.append(particle)
+        # Track Global Best
         if particle.best_tour_length < best_tour_length:
             best_tour = particle.best_tour
             best_tour_length = particle.best_tour_length
 
+    # --- MAIN OPTIMIZATION LOOP ---
     for t in range(max_it):
+        # Termination Condition
+        if time.time() - func_start_time > time_limit:
+            break
+
+        # ENHANCEMENT 2: TIME-VARYING INERTIA (LDIW)
+        # Linearly decreases inertia to transition from Exploration -> Exploitation
         inertia = inertia_start - ((inertia_start - inertia_end) * t / max_it)
 
         for i, particle in enumerate(particles):
+            if time.time() - func_start_time > time_limit:
+                break
+
+            # 1. CALCULATE VECTORS
+            # Cognitive Component (Pull towards own history)
             local_best_difference = [x - y for x,y in zip(particle.best_position,particle.position)]
+            
+            # Social Component (Pull towards neighborhood history)
+            # Uses Dynamic Topology to determine who 'best_neighbour' is
             best_neighbour = get_best_neighbour(i, particles, t, max_it)
             neighbour_best_difference = [x - y for x,y in zip(best_neighbour.best_position,particle.position)]
 
+            # 2. UPDATE VELOCITY
+            # v(t+1) = w*v(t) + c1*r1*(pBest - x) + c2*r2*(gBest - x)
             old_velocity_component = [inertia * x for x in particle.velocity]
             cognitive_velocity_component = [alpha * epsilon() * x for x in local_best_difference]
             social_velocity_component = [beta * epsilon() * x for x in neighbour_best_difference]
             particle.velocity = [x+y+z for x,y,z in zip(old_velocity_component,cognitive_velocity_component,social_velocity_component)]
 
+            # 3. UPDATE POSITION
+            # x(t+1) = x(t) + v(t+1)
             particle.position = [x + v for x,v in zip(particle.position,particle.velocity)]
+            
+            # Apply Drift Removal (Enhancement 1)
             particle.normalise_position()
 
+            # 4. EVALUATION
             new_tour_length = get_tour_length(particle.position, dist_matrix)
+            
+            # Update Personal Best
             if new_tour_length < particle.best_tour_length:
                 particle.best_position = particle.position[:]
                 particle.best_tour = get_tour(particle.position)
                 particle.best_tour_length = new_tour_length
 
+            # ENHANCEMENT 3: PARTICLE CROSSOVER (5% Mutation Rate)
+            # Introduces structural diversity by hybridising with the best neighbor
             if random.random() >= 0.95:
                 particle_crossover(particle, best_neighbour, num_cities, dist_matrix)
 
+            # Update Global Best (After both standard move and crossover)
             if particle.best_tour_length < best_tour_length:
                 best_tour = particle.best_tour
                 best_tour_length = particle.best_tour_length
 
     return best_tour, best_tour_length
 
-max_it = 2000
-num_parts = 50
 
-new_tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts)
+# Function call
+new_tour, tour_length = PSO(dist_matrix, num_cities, max_it, num_parts, inertia_start, inertia_end, alpha, beta)
 
 
 
