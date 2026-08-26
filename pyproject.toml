@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tsp-swarm"
+version = "1.0.0"
+description = "Ant Colony and Particle Swarm Optimisation for the travelling salesman problem, implemented from scratch"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Hamzah Ibrahim" }]
+keywords = ["tsp", "metaheuristics", "ant-colony-optimisation", "particle-swarm-optimisation", "combinatorial-optimisation"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "License :: OSI Approved :: MIT License",
+]
+
+# The solvers deliberately depend on nothing outside the standard library.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+plots = ["matplotlib>=3.5"]
+
+[project.scripts]
+tsp = "tsp.cli:main"
+
+[tool.setuptools]
+packages = ["tsp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
