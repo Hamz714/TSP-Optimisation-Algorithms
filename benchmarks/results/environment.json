@@ -1,0 +1,10 @@
+{
+  "python": "3.12.6",
+  "implementation": "CPython",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+  "cores": 8,
+  "small_budget_seconds": 10.0,
+  "large_budget_seconds": 60.0,
+  "large_threshold_cities": 200
+}

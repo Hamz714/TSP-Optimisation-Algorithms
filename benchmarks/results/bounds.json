@@ -1,0 +1,164 @@
+{
+  "berlin52": {
+    "bound": 7542,
+    "exact": true,
+    "iterations": 19,
+    "n": 52,
+    "published_optimum": 7542,
+    "seconds": 0.06,
+    "upper_bound": 7542
+  },
+  "ch150": {
+    "bound": 6491,
+    "exact": false,
+    "iterations": 925,
+    "n": 150,
+    "published_optimum": 6528,
+    "seconds": 3.35,
+    "upper_bound": 6549
+  },
+  "d198": {
+    "bound": 14570,
+    "exact": false,
+    "iterations": 940,
+    "n": 198,
+    "published_optimum": 15780,
+    "seconds": 5.39,
+    "upper_bound": 16654
+  },
+  "eil76": {
+    "bound": 537,
+    "exact": false,
+    "iterations": 554,
+    "n": 76,
+    "published_optimum": 538,
+    "seconds": 0.56,
+    "upper_bound": 558
+  },
+  "kroA100": {
+    "bound": 20937,
+    "exact": false,
+    "iterations": 613,
+    "n": 100,
+    "published_optimum": 21282,
+    "seconds": 1.03,
+    "upper_bound": 21833
+  },
+  "lin318": {
+    "bound": 41842,
+    "exact": false,
+    "iterations": 1089,
+    "n": 318,
+    "published_optimum": 42029,
+    "seconds": 14.49,
+    "upper_bound": 44096
+  },
+  "pcb442": {
+    "bound": 50486,
+    "exact": false,
+    "iterations": 1066,
+    "n": 442,
+    "published_optimum": 50778,
+    "seconds": 28.45,
+    "upper_bound": 51696
+  },
+  "rat783": {
+    "bound": 8773,
+    "exact": false,
+    "iterations": 750,
+    "n": 783,
+    "published_optimum": 8806,
+    "seconds": 55.46,
+    "upper_bound": 9169
+  },
+  "tsp012": {
+    "bound": 56,
+    "exact": true,
+    "iterations": 1,
+    "n": 12,
+    "published_optimum": null,
+    "seconds": 0.0,
+    "upper_bound": 56
+  },
+  "tsp017": {
+    "bound": 1444,
+    "exact": true,
+    "iterations": 10,
+    "n": 17,
+    "published_optimum": null,
+    "seconds": 0.0,
+    "upper_bound": 1444
+  },
+  "tsp021": {
+    "bound": 2549,
+    "exact": false,
+    "iterations": 472,
+    "n": 21,
+    "published_optimum": null,
+    "seconds": 0.08,
+    "upper_bound": 2693
+  },
+  "tsp026": {
+    "bound": 1473,
+    "exact": false,
+    "iterations": 676,
+    "n": 26,
+    "published_optimum": null,
+    "seconds": 0.21,
+    "upper_bound": 1537
+  },
+  "tsp042": {
+    "bound": 1187,
+    "exact": true,
+    "iterations": 246,
+    "n": 42,
+    "published_optimum": null,
+    "seconds": 0.16,
+    "upper_bound": 1214
+  },
+  "tsp048": {
+    "bound": 12109,
+    "exact": false,
+    "iterations": 845,
+    "n": 48,
+    "published_optimum": null,
+    "seconds": 0.61,
+    "upper_bound": 12686
+  },
+  "tsp058": {
+    "bound": 25355,
+    "exact": false,
+    "iterations": 532,
+    "n": 58,
+    "published_optimum": null,
+    "seconds": 0.56,
+    "upper_bound": 25628
+  },
+  "tsp175": {
+    "bound": 21369,
+    "exact": false,
+    "iterations": 1167,
+    "n": 175,
+    "published_optimum": null,
+    "seconds": 5.67,
+    "upper_bound": 21468
+  },
+  "tsp180": {
+    "bound": 1947,
+    "exact": false,
+    "iterations": 1598,
+    "n": 180,
+    "published_optimum": null,
+    "seconds": 7.63,
+    "upper_bound": 1950
+  },
+  "tsp535": {
+    "bound": 48361,
+    "exact": false,
+    "iterations": 1029,
+    "n": 535,
+    "published_optimum": null,
+    "seconds": 40.41,
+    "upper_bound": 48958
+  }
+}
