@@ -109,16 +109,19 @@ def headline_table(rows: list[dict], bounds: dict) -> str:
 
 
 def _status(best: int | None, reference: int | None, kind: str) -> str:
-    """A tour whose length equals a valid lower bound is optimal, and the pair is the proof.
+    """How optimality is known, when it is known.
 
-    This is why the bound is worth computing on instances that already have a published
-    optimum too: the same argument closes instances that have neither.
+    Two different things can establish it, and the label says which. Matching a published
+    optimum confirms the tour against an external result. Matching a lower bound computed
+    here proves it from scratch, since the optimum can be neither below the bound nor above
+    a tour that exists. The second is the only route available on instances that ship with no
+    published optimum.
     """
     if best is None or reference is None:
         return ""
     if best > reference:
         return ""
-    return "optimal" if kind == "optimum" else "optimal (certified here)"
+    return "optimal (published)" if kind == "optimum" else "optimal (certified here)"
 
 
 def certified_optimal(rows: list[dict], bounds: dict) -> tuple[int, int, int, int]:
@@ -306,18 +309,66 @@ def stagnation_table(rows: list[dict], bounds: dict) -> str:
     return _render(headers, body)
 
 
-def bounds_table(bounds: dict) -> str:
-    headers = ["instance", "n", "lower bound", "published optimum", "status"]
+def best_lengths(rows: list[dict]) -> dict[str, int]:
+    """Shortest tour found for each instance across every configuration and seed."""
+    best: dict[str, int] = {}
+    for row in rows:
+        name, length = row["instance"], row["length"]
+        if name not in best or length < best[name]:
+            best[name] = length
+    return best
+
+
+def bounds_table(bounds: dict, best: dict[str, int] | None = None) -> str:
+    """Lower bounds against the best tour found.
+
+    Optimality is proven when the best tour found equals the lower bound, since the optimum
+    cannot be below the bound or above a tour that exists. This is the same criterion the
+    headline table uses.
+
+    Whether the subgradient ascent closed the relaxation on its own is a separate and
+    strictly weaker condition, reported in its own column: it holds whenever the 1-tree
+    reaches degree 2 everywhere and so is itself a tour, but a bound can equally be matched
+    by a tour the search found. Every instance where the relaxation closed is also one where
+    the bound was matched, so the count of proven optima is driven by the matching criterion.
+    """
+    best = best or {}
+    headers = [
+        "instance",
+        "n",
+        "lower bound",
+        "best tour",
+        "published optimum",
+        "1-tree closed",
+        "what the bound proves",
+    ]
     body = []
     for name, entry in sorted(bounds.items(), key=lambda item: (item[1]["n"], item[0])):
         optimum = entry.get("published_optimum")
-        if entry.get("exact"):
-            status = "proven optimal"
-        elif optimum:
-            status = f"{100.0 * entry['bound'] / optimum:.2f} % of optimum"
+        bound = entry["bound"]
+        found = best.get(name)
+
+        # Deliberately scoped to what the bound alone establishes. An instance can be known
+        # optimal from a published optimum while the bound here still leaves a gap, which is
+        # why this column is not the same as the status column in the headline table.
+        if found is not None and found <= bound:
+            status = "optimality"
+        elif found is not None:
+            status = f"gap at most {100.0 * (found - bound) / bound:.2f} %"
         else:
-            status = "lower bound"
-        body.append([name, entry["n"], entry["bound"], optimum or "unknown", status])
+            status = "nothing yet"
+
+        body.append(
+            [
+                name,
+                entry["n"],
+                bound,
+                found if found is not None else "n/a",
+                optimum or "unknown",
+                "yes" if entry.get("exact") else "no",
+                status,
+            ]
+        )
     return _render(headers, body)
 
 
@@ -325,9 +376,11 @@ def main() -> int:
     bounds = _bounds()
     output = RESULTS / "tables.md"
     sections = []
+    best: dict[str, int] = {}
 
     if (RESULTS / "results.csv").exists():
         rows = _load(RESULTS / "results.csv")
+        best = best_lengths(rows)
         sections.append("## Headline results\n\n" + headline_table(rows, bounds))
         sections.append("## Distribution over seeds\n\n" + distribution_table(rows, bounds))
         sections.append("## All configurations, mean gap\n\n" + comparison_table(rows, bounds))
@@ -346,7 +399,7 @@ def main() -> int:
         )
 
     if bounds:
-        sections.append("## Lower bounds\n\n" + bounds_table(bounds))
+        sections.append("## Lower bounds\n\n" + bounds_table(bounds, best))
 
     text = "\n\n".join(sections) + "\n"
     output.write_text(text)

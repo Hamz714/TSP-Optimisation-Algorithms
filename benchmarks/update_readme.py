@@ -119,9 +119,11 @@ def plots_block() -> str:
 def main() -> int:
     bounds = make_tables._bounds()
     text = README.read_text()
+    best: dict[str, int] = {}
 
     if (RESULTS / "results.csv").exists():
         rows = make_tables._load(RESULTS / "results.csv")
+        best = make_tables.best_lengths(rows)
         text = replace(text, "RESULT_SUMMARY", summary_paragraph(rows, bounds))
         text = replace(text, "TABLE_HEADLINE", make_tables.headline_table(rows, bounds))
         text = replace(text, "TABLE_DISTRIBUTION", make_tables.distribution_table(rows, bounds))
@@ -137,7 +139,7 @@ def main() -> int:
         text = replace(text, "TABLE_STAGNATION", make_tables.stagnation_table(rows, bounds))
 
     if bounds:
-        text = replace(text, "TABLE_BOUNDS", make_tables.bounds_table(bounds))
+        text = replace(text, "TABLE_BOUNDS", make_tables.bounds_table(bounds, best))
 
     for marker, body in [
         ("ENVIRONMENT", environment_note()),

@@ -123,23 +123,23 @@
 
 ## Lower bounds
 
-| instance | n   | lower bound | published optimum | status             |
-| -------- | --: | ----------: | ----------------: | -----------------: |
-| tsp012   |  12 |          56 |           unknown |     proven optimal |
-| tsp017   |  17 |        1444 |           unknown |     proven optimal |
-| tsp021   |  21 |        2549 |           unknown |        lower bound |
-| tsp026   |  26 |        1473 |           unknown |        lower bound |
-| tsp042   |  42 |        1187 |           unknown |     proven optimal |
-| tsp048   |  48 |       12109 |           unknown |        lower bound |
-| berlin52 |  52 |        7542 |              7542 |     proven optimal |
-| tsp058   |  58 |       25355 |           unknown |        lower bound |
-| eil76    |  76 |         537 |               538 | 99.81 % of optimum |
-| kroA100  | 100 |       20937 |             21282 | 98.38 % of optimum |
-| ch150    | 150 |        6491 |              6528 | 99.43 % of optimum |
-| tsp175   | 175 |       21369 |           unknown |        lower bound |
-| tsp180   | 180 |        1947 |           unknown |        lower bound |
-| d198     | 198 |       14570 |             15780 | 92.33 % of optimum |
-| lin318   | 318 |       41842 |             42029 | 99.56 % of optimum |
-| pcb442   | 442 |       50486 |             50778 | 99.42 % of optimum |
-| tsp535   | 535 |       48361 |           unknown |        lower bound |
-| rat783   | 783 |        8773 |              8806 | 99.63 % of optimum |
+| instance | n   | lower bound | best tour | published optimum | 1-tree closed | status             |
+| -------- | --: | ----------: | --------: | ----------------: | ------------: | -----------------: |
+| tsp012   |  12 |          56 |        56 |           unknown |           yes |     proven optimal |
+| tsp017   |  17 |        1444 |      1444 |           unknown |           yes |     proven optimal |
+| tsp021   |  21 |        2549 |      2549 |           unknown |            no |     proven optimal |
+| tsp026   |  26 |        1473 |      1473 |           unknown |            no |     proven optimal |
+| tsp042   |  42 |        1187 |      1187 |           unknown |           yes |     proven optimal |
+| tsp048   |  48 |       12109 |     12166 |           unknown |            no | gap at most 0.47 % |
+| berlin52 |  52 |        7542 |      7542 |              7542 |           yes |     proven optimal |
+| tsp058   |  58 |       25355 |     25395 |           unknown |            no | gap at most 0.16 % |
+| eil76    |  76 |         537 |       538 |               538 |            no | gap at most 0.19 % |
+| kroA100  | 100 |       20937 |     21282 |             21282 |            no | gap at most 1.65 % |
+| ch150    | 150 |        6491 |      6528 |              6528 |            no | gap at most 0.57 % |
+| tsp175   | 175 |       21369 |     21407 |           unknown |            no | gap at most 0.18 % |
+| tsp180   | 180 |        1947 |      1950 |           unknown |            no | gap at most 0.15 % |
+| d198     | 198 |       14570 |     15833 |             15780 |            no | gap at most 8.67 % |
+| lin318   | 318 |       41842 |     42290 |             42029 |            no | gap at most 1.07 % |
+| pcb442   | 442 |       50486 |     51454 |             50778 |            no | gap at most 1.92 % |
+| tsp535   | 535 |       48361 |     48770 |           unknown |            no | gap at most 0.85 % |
+| rat783   | 783 |        8773 |      9043 |              8806 |            no | gap at most 3.08 % |

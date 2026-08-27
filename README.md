@@ -38,6 +38,13 @@ TSPLIB instances; for the ten instances that ship only as anonymous distance mat
 the Held-Karp lower bound computed here, marked `*`, so those gaps are upper bounds on the
 true gap rather than exact gaps.
 
+The `status` column records how optimality is known where it is known.
+`optimal (published)` means the tour matches the published optimum. `optimal (certified here)`
+means it matches the lower bound computed in this repository, which proves optimality
+without reference to any external result and is the only route available on the unlabelled
+instances. See [the bound section](#certifying-quality-the-held-karp-lower-bound) for the
+argument.
+
 <!--TABLE_HEADLINE-->
 
 | instance | n   | reference | ACO best | ACO gap % | PSO best | PSO gap % | status                   |
@@ -48,11 +55,11 @@ true gap rather than exact gaps.
 | tsp026   |  26 |    1473 * |     1473 |      0.00 |     1473 |      0.00 | optimal (certified here) |
 | tsp042   |  42 |    1187 * |     1187 |      0.00 |     1188 |      0.08 | optimal (certified here) |
 | tsp048   |  48 |   12109 * |    12166 |      0.47 |    12282 |      1.43 |                          |
-| berlin52 |  52 |      7542 |     7542 |      0.00 |     7542 |      0.00 |                  optimal |
+| berlin52 |  52 |      7542 |     7542 |      0.00 |     7542 |      0.00 |      optimal (published) |
 | tsp058   |  58 |   25355 * |    25395 |      0.16 |    25395 |      0.16 |                          |
-| eil76    |  76 |       538 |      538 |      0.00 |      541 |      0.56 |                  optimal |
-| kroA100  | 100 |     21282 |    21282 |      0.00 |    21282 |      0.00 |                  optimal |
-| ch150    | 150 |      6528 |     6528 |      0.00 |     6588 |      0.92 |                  optimal |
+| eil76    |  76 |       538 |      538 |      0.00 |      541 |      0.56 |      optimal (published) |
+| kroA100  | 100 |     21282 |    21282 |      0.00 |    21282 |      0.00 |      optimal (published) |
+| ch150    | 150 |      6528 |     6528 |      0.00 |     6588 |      0.92 |      optimal (published) |
 | tsp175   | 175 |   21369 * |    21407 |      0.18 |    21412 |      0.20 |                          |
 | tsp180   | 180 |    1947 * |     1950 |      0.15 |     1980 |      1.69 |                          |
 | d198     | 198 |     15780 |    15849 |      0.44 |    15833 |      0.34 |                          |
@@ -384,36 +391,56 @@ non-improving iterations. The step direction is blended with the previous subgra
 faster than the raw subgradient. Minimum 1-trees are computed by Prim's algorithm in `O(n^2)`,
 which is the right choice on a dense matrix that changes every iteration.
 
-If the subgradient ever reaches zero then every city has degree 2, the 1-tree *is* a tour,
-and the bound is exactly optimal. That happens on four of the bundled instances, which is how
-berlin52 and three of the previously unlabelled explicit instances come out with a proven
-optimum rather than a bound.
-
 Since all distances are integers the optimum is an integer, so the real-valued bound is
 rounded up.
 
+**What counts as proven optimal.** The optimum cannot lie below the lower bound, and it
+cannot lie above the length of a tour that has actually been constructed. So whenever the
+best tour found equals the bound, the two meet and that tour is optimal. This is the single
+criterion used everywhere in this README, including the [results table](#results).
+
+There are two ways the pair can meet, and the distinction is worth keeping separate because
+it is easy to conflate them:
+
+- The subgradient ascent reaches zero, meaning every city in the 1-tree has degree 2. The
+  1-tree is then itself a tour, so the relaxation has closed on its own. This happens on
+  berlin52, tsp012, tsp017 and tsp042.
+- The search finds a tour that matches a bound the relaxation did not close. This adds
+  tsp021 and tsp026.
+
+The first is a strictly stronger event but a strictly smaller set, and every instance in it
+is also in the second. Counting by the criterion above gives six instances closed in total,
+five of which had no published optimum to begin with.
+
+The table below is scoped to what the bound *alone* establishes, which is why it is not
+interchangeable with the status column in the [results table](#results). An instance can be
+known optimal because the search matched a published optimum while the bound computed here
+still leaves a gap: eil76, kroA100 and ch150 are all of this kind, marked
+`optimal (published)` above and `gap at most ...` below. Only the rows reading `optimality`
+below are proven optimal by this repository's own arithmetic.
+
 <!--TABLE_BOUNDS-->
 
-| instance | n   | lower bound | published optimum | status             |
-| -------- | --: | ----------: | ----------------: | -----------------: |
-| tsp012   |  12 |          56 |           unknown |     proven optimal |
-| tsp017   |  17 |        1444 |           unknown |     proven optimal |
-| tsp021   |  21 |        2549 |           unknown |        lower bound |
-| tsp026   |  26 |        1473 |           unknown |        lower bound |
-| tsp042   |  42 |        1187 |           unknown |     proven optimal |
-| tsp048   |  48 |       12109 |           unknown |        lower bound |
-| berlin52 |  52 |        7542 |              7542 |     proven optimal |
-| tsp058   |  58 |       25355 |           unknown |        lower bound |
-| eil76    |  76 |         537 |               538 | 99.81 % of optimum |
-| kroA100  | 100 |       20937 |             21282 | 98.38 % of optimum |
-| ch150    | 150 |        6491 |              6528 | 99.43 % of optimum |
-| tsp175   | 175 |       21369 |           unknown |        lower bound |
-| tsp180   | 180 |        1947 |           unknown |        lower bound |
-| d198     | 198 |       14570 |             15780 | 92.33 % of optimum |
-| lin318   | 318 |       41842 |             42029 | 99.56 % of optimum |
-| pcb442   | 442 |       50486 |             50778 | 99.42 % of optimum |
-| tsp535   | 535 |       48361 |           unknown |        lower bound |
-| rat783   | 783 |        8773 |              8806 | 99.63 % of optimum |
+| instance | n   | lower bound | best tour | published optimum | 1-tree closed | what the bound proves |
+| -------- | --: | ----------: | --------: | ----------------: | ------------: | --------------------: |
+| tsp012   |  12 |          56 |        56 |           unknown |           yes |            optimality |
+| tsp017   |  17 |        1444 |      1444 |           unknown |           yes |            optimality |
+| tsp021   |  21 |        2549 |      2549 |           unknown |            no |            optimality |
+| tsp026   |  26 |        1473 |      1473 |           unknown |            no |            optimality |
+| tsp042   |  42 |        1187 |      1187 |           unknown |           yes |            optimality |
+| tsp048   |  48 |       12109 |     12166 |           unknown |            no |    gap at most 0.47 % |
+| berlin52 |  52 |        7542 |      7542 |              7542 |           yes |            optimality |
+| tsp058   |  58 |       25355 |     25395 |           unknown |            no |    gap at most 0.16 % |
+| eil76    |  76 |         537 |       538 |               538 |            no |    gap at most 0.19 % |
+| kroA100  | 100 |       20937 |     21282 |             21282 |            no |    gap at most 1.65 % |
+| ch150    | 150 |        6491 |      6528 |              6528 |            no |    gap at most 0.57 % |
+| tsp175   | 175 |       21369 |     21407 |           unknown |            no |    gap at most 0.18 % |
+| tsp180   | 180 |        1947 |      1950 |           unknown |            no |    gap at most 0.15 % |
+| d198     | 198 |       14570 |     15833 |             15780 |            no |    gap at most 8.67 % |
+| lin318   | 318 |       41842 |     42290 |             42029 |            no |    gap at most 1.07 % |
+| pcb442   | 442 |       50486 |     51454 |             50778 |            no |    gap at most 1.92 % |
+| tsp535   | 535 |       48361 |     48770 |           unknown |            no |    gap at most 0.85 % |
+| rat783   | 783 |        8773 |      9043 |              8806 |            no |    gap at most 3.08 % |
 
 <!--/TABLE_BOUNDS-->
 
