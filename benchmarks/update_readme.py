@@ -59,8 +59,8 @@ def summary_paragraph(rows: list[dict], bounds: dict) -> str:
     return (
         f"Across {len(instances)} instances of up to {largest} cities, and taking the best of five "
         f"seeds per instance, the ant colony reaches a mean gap of "
-        f"**{statistics.mean(gaps['aco']):.2f} percent** and the particle swarm "
-        f"**{statistics.mean(gaps['pso']):.2f} percent** against published optima or certified "
+        f"**{statistics.mean(gaps['aco']):.2f} %** and the particle swarm "
+        f"**{statistics.mean(gaps['pso']):.2f} %** against published optima or certified "
         f"lower bounds. The search reaches the published optimum on **{known_hit} of "
         f"{known_total}** TSPLIB instances, and on **{unknown_hit} of {unknown_total}** of the "
         f"unlabelled instances it returns a tour whose length equals the computed lower bound, "

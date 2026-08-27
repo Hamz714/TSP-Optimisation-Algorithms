@@ -8,11 +8,11 @@ Ant Colony Optimisation and Particle Swarm Optimisation for the symmetric travel
 salesman problem, written from scratch in pure Python with no third party dependencies in
 the solvers. Both are hybridised with a candidate-list 2-opt and Or-opt local search, and
 solution quality is certified against a Held-Karp lower bound computed by Lagrangian
-relaxation, so every result below is a bounded claim rather than an unanchored number.
+relaxation, so every result below is a bounded claim.
 
 <!--RESULT_SUMMARY-->
 
-Across 18 instances of up to 783 cities, and taking the best of five seeds per instance, the ant colony reaches a mean gap of **0.38 percent** and the particle swarm **0.72 percent** against published optima or certified lower bounds. The search reaches the published optimum on **4 of 8** TSPLIB instances, and on **5 of 10** of the unlabelled instances it returns a tour whose length equals the computed lower bound, which proves those tours optimal.
+Across 18 instances of up to 783 cities, and taking the best of five seeds per instance, the ant colony reaches a mean gap of **0.38 %** and the particle swarm **0.72 %** against published optima or certified lower bounds. The search reaches the published optimum on **4 of 8** TSPLIB instances, and on **5 of 10** of the unlabelled instances it returns a tour whose length equals the computed lower bound, which proves those tours optimal.
 
 <!--/RESULT_SUMMARY-->
 
@@ -63,7 +63,7 @@ true gap rather than exact gaps.
 
 <!--/TABLE_HEADLINE-->
 
-Spread across seeds, which matters more than a single lucky run:
+Spread across seeds:
 
 <!--TABLE_DISTRIBUTION-->
 
@@ -233,8 +233,7 @@ finding a move cannot start an improving move again until one of its incident ed
 Such cities are deactivated and held out of a work queue, and are re-queued only when a move
 touches them. Successive passes then cost roughly the number of cities actually affected
 rather than `n`. This is an approximation, deliberately: a fresh pass over a settled tour
-still occasionally finds something, because a city is not rescanned unless a move disturbs
-it. The speedup buys far more inside a metaheuristic than an exhaustive descent would.
+still occasionally finds something, because a city is not rescanned unless a move disturbs it.
 
 **Position index and shorter-arc reversal.** A `pos[city]` array gives a city's index in the
 tour, so orientation tests are `O(1)`. A 2-opt move must reverse one of the two arcs it
@@ -297,11 +296,11 @@ similarity = | E(T_best) intersect E(T_median) | / n
 
 When it exceeds 0.95 the pheromone matrix is smoothed back towards its initial value,
 `tau <- lambda * tau_0 + (1 - lambda) * tau` with `lambda = 0.5`. Smoothing rather than
-resetting is the point: it compresses the differences between edges, restoring exploration,
-while preserving their ranking and therefore everything the colony has learned.
+resetting compresses the differences between edges, restoring exploration, while preserving
+their ranking and therefore everything the colony has learned.
 
 The [ablation](#ablation) measures this mechanism at zero on every instance benchmarked here,
-and the instrumentation explains why. It is reported rather than quietly dropped.
+and the instrumentation explains why.
 
 ## Particle Swarm Optimisation
 
@@ -350,14 +349,13 @@ particle just left.
 **Memetic local search.** With probability 0.05 a particle's personal best is improved by
 2-opt and Or-opt. Pure random-key PSO is a weak TSP solver at scale and this is what makes it
 competitive: on the 180-city explicit instance the unenhanced configuration is off by orders
-of magnitude while the enhanced one lands within a few tenths of a percent of the lower
-bound. It is disabled in the baseline configuration so that its contribution stays visible in
-the ablation rather than being quietly folded into the headline number.
+of magnitude while the enhanced one lands within a few tenths of a % of the lower bound. It is
+disabled in the baseline configuration so that its contribution stays visible in the ablation.
 
 ## Certifying quality: the Held-Karp lower bound
 
 [`tsp/bounds.py`](tsp/bounds.py). A heuristic tour length on its own says nothing about
-quality. Without a reference, 48948 could be one percent or forty percent above optimal, and
+quality. Without a reference, 48948 could be 1 % or 40 % above optimal, and
 ten of the eighteen instances here have no published optimum. Computing a certified lower
 bound turns every result into a bounded claim, because the optimum is trapped between the
 bound and the best tour found.
@@ -419,11 +417,9 @@ rounded up.
 
 <!--/TABLE_BOUNDS-->
 
-The correctness argument for this code is not the derivation, it is the test: on every
-instance with a published optimum, the computed bound must not exceed it. A bound that is too
-high would silently understate every reported gap, which is a far worse failure than no bound
-at all. The suite also checks the bound against brute-forced optima on small random
-instances, including non-metric ones.
+The bound is checked against every instance with a published optimum: it must not exceed one.
+A bound that is too high would understate every reported gap. The suite also checks it against
+brute-forced optima on small random instances, including non-metric ones.
 
 ## Ablation
 
@@ -464,31 +460,29 @@ with the range, because the distribution is heavily skewed:
 
 <!--/TABLE_ABLATION_COST-->
 
-Read honestly, this says three things.
+This says three things.
 
 **Local search dominates.** It is worth several percentage points to the ant colony and
 several orders of magnitude to the particle swarm. Neither algorithm is competitive without
 it, and the headline results are as much a result about memetic search as about swarm
-intelligence. Saying otherwise would misattribute the numbers.
+intelligence.
 
 **Candidate lists pay for themselves twice.** They cut the cost of a construction step from
 `O(n)` to `O(k)` and they concentrate probability mass on plausible edges. The benefit grows
 with instance size, which is what a pruning-based speedup should do.
 
-**Two mechanisms do not earn their place at this budget, and the measurement is the point.**
-Dynamic topology and time-varying inertia land within noise of zero, and occasionally on the
-wrong side of it. Order crossover is a small positive. These were included on the strength of
-the literature; the ablation is what establishes whether they help *here*, on these instances,
-at a ten second budget, and for two of them the answer is that they do not. They are kept,
-switchable and measured, rather than quietly removed, because a negative result that is
-reproducible is worth more than an unmeasured claim.
+**Two mechanisms do not earn their place at this budget.** Dynamic topology and time-varying
+inertia land within noise of zero, and occasionally on the wrong side of it. Order crossover
+is a small positive. These were included on the strength of the literature; the ablation
+establishes whether they help *here*, on these instances, at a ten second budget, and for two
+of them the answer is that they do not. They are kept switchable and measured.
 
-Stagnation recovery is the clearest case, and worth following through. Instrumenting the
-similarity metric shows the 0.95 threshold crossed on roughly 1 percent of iterations at
-`n = 100` and never once at `n = 318` or `n = 535`: at a ten second budget the colony simply
-never reaches the regime the mechanism was built for, because local search keeps injecting
-diversity and there are too few iterations for pheromone to collapse. The fair test is
-therefore a long budget on small instances, where thousands of iterations do fit:
+Stagnation recovery is the clearest case. Instrumenting the similarity metric shows the 0.95
+threshold crossed on roughly 1 % of iterations at `n = 100` and never once at `n = 318` or
+`n = 535`: at a ten second budget the colony never reaches the regime the mechanism was built
+for, because local search keeps injecting diversity and there are too few iterations for
+pheromone to collapse. The fair test is therefore a long budget on small instances, where
+thousands of iterations do fit:
 
 <!--TABLE_STAGNATION-->
 
@@ -506,8 +500,7 @@ mechanism is insurance that never gets claimed at these sizes: with local search
 colony reaches the optimum or close to it within the first second and the run is decided long
 before pheromone concentration becomes the binding constraint. It is retained because the
 regime it guards against is real for larger instances and longer budgets than are benchmarked
-here, but on this evidence it contributes nothing, and the honest summary of the ACO
-enhancements is that local search and candidate lists carry them.
+here, but on this evidence it contributes nothing.
 
 ## Benchmark methodology
 
